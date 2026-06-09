@@ -6,17 +6,17 @@ const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 // ==================== ESTADO ====================
-let currentUser     = null
-let userData        = {}
-let apuracoes       = []
-let rondas          = []
-let fontes          = []
-let feedItems       = []
-let editandoId      = null
-let editandoFonteId = null
-let paginaAtual     = 0
-const POR_PAGINA    = 20
-let filtroAutor     = ''
+let currentUser      = null
+let userData         = {}
+let apuracoes        = []
+let rondas           = []
+let fontes           = []
+let feedItems        = []
+let editandoId       = null
+let editandoFonteId  = null
+let editandoRondaId  = null
+let paginaAtual      = 0
+const POR_PAGINA     = 20
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -45,6 +45,7 @@ async function iniciarApp() {
     setupNavegacao()
     await carregarTudo()
     setupRealtime()
+    pedirPermissaoNotificacao()
 }
 
 // ==================== CONTROLE DE TELAS ====================
@@ -93,11 +94,33 @@ function traduzirErroAuth(msg) {
 function alternarParaCadastro() { mostrarTela('tela-cadastro') }
 function alternarParaLogin()    { mostrarTela('tela-login') }
 
+// ==================== NOTIFICAÇÕES DO NAVEGADOR ====================
+function pedirPermissaoNotificacao() {
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'default') {
+        Notification.requestPermission()
+    }
+}
+
+function dispararNotificacao(titulo, corpo) {
+    if (!('Notification' in window)) return
+    if (Notification.permission !== 'granted') return
+    if (document.hasFocus()) return // só notifica se a aba estiver em segundo plano
+    new Notification(titulo, { body: corpo, icon: '📋' })
+}
+
 // ==================== REALTIME ====================
 function setupRealtime() {
     db.channel('feed-realtime')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_items' }, (payload) => {
-            if (!feedItems.find(f => f.id === payload.new.id)) { feedItems.unshift(payload.new); renderFeed() }
+            if (!feedItems.find(f => f.id === payload.new.id)) {
+                feedItems.unshift(payload.new)
+                renderFeed()
+                // Notifica posts manuais de outros usuários
+                if (payload.new.autor !== userData.nome) {
+                    dispararNotificacao('Mural da Redação', `${payload.new.autor}: ${payload.new.conteudo}`)
+                }
+            }
         }).subscribe()
 
     db.channel('apuracoes-insert')
@@ -106,6 +129,11 @@ function setupRealtime() {
                 apuracoes.unshift(payload.new)
                 atualizarFiltroAutores()
                 renderApuracoes(); renderRegistros()
+                // Notifica nova apuração urgente ou qualquer nova de outro usuário
+                if (payload.new.autor !== userData.nome) {
+                    const prefixo = payload.new.urgente ? '🔴 URGENTE — ' : ''
+                    dispararNotificacao(`${prefixo}Nova apuração`, `${payload.new.autor}: ${payload.new.titulo}`)
+                }
             }
         }).subscribe()
 
@@ -193,12 +221,11 @@ async function carregarApuracoes() {
     renderApuracoes()
 }
 
-// ---- Filtro por autor ----
 function atualizarFiltroAutores() {
     const select = document.getElementById('filter-autor')
     if (!select) return
-    const autores   = [...new Set(apuracoes.map(a => a.autor))].sort()
-    const atual     = select.value
+    const autores = [...new Set(apuracoes.map(a => a.autor))].sort()
+    const atual   = select.value
     select.innerHTML = '<option value="">Todos os autores</option>'
     autores.forEach(a => {
         const opt = document.createElement('option')
@@ -209,7 +236,8 @@ function atualizarFiltroAutores() {
 }
 
 function renderApuracoes() {
-    const autorFiltro = document.getElementById('filter-autor')?.value || ''
+    const autorFiltro  = document.getElementById('filter-autor')?.value || ''
+    const buscaKanban  = document.getElementById('search-kanban')?.value.toLowerCase() || ''
     const columns = {
         andamento: document.getElementById('column-andamento'),
         quente:    document.getElementById('column-quente'),
@@ -217,37 +245,32 @@ function renderApuracoes() {
     }
     Object.values(columns).forEach(col => col.innerHTML = '')
 
-    // Filtra por autor se selecionado
-    const visiveis = autorFiltro
-        ? apuracoes.filter(a => a.autor === autorFiltro)
-        : apuracoes
+    let visiveis = apuracoes
+    if (autorFiltro) visiveis = visiveis.filter(a => a.autor === autorFiltro)
+    if (buscaKanban) visiveis = visiveis.filter(a =>
+        a.titulo.toLowerCase().includes(buscaKanban) ||
+        a.descricao.toLowerCase().includes(buscaKanban) ||
+        a.fonte.toLowerCase().includes(buscaKanban)
+    )
 
-    // Paginação: mostra só os da página atual (acumulativo — "carregar mais")
+    // Urgentes sempre primeiro
+    visiveis = [...visiveis].sort((a, b) => (b.urgente ? 1 : 0) - (a.urgente ? 1 : 0))
+
     const fatia = visiveis.slice(0, (paginaAtual + 1) * POR_PAGINA)
-
     fatia.forEach(ap => {
         const col = columns[ap.classificacao]
         if (col) col.appendChild(createCard(ap))
     })
 
-    // Botão "Carregar mais" se houver mais cards
+    const kanban = document.querySelector('.kanban-board')
+    kanban?.querySelector('.btn-carregar-mais')?.remove()
     if (visiveis.length > fatia.length) {
-        const col = document.getElementById('column-andamento')
-        if (col) {
-            const btn = document.createElement('button')
-            btn.className   = 'btn-secondary'
-            btn.textContent = `Carregar mais (${visiveis.length - fatia.length} restantes)`
-            btn.style.cssText = 'width:100%;margin-top:12px;font-size:12px;'
-            btn.onclick = () => { paginaAtual++; renderApuracoes() }
-            // Coloca no final do kanban inteiro, não numa coluna
-            const kanban = document.querySelector('.kanban-board')
-            const existing = kanban?.querySelector('.btn-carregar-mais')
-            if (existing) existing.remove()
-            btn.classList.add('btn-carregar-mais')
-            kanban?.appendChild(btn)
-        }
-    } else {
-        document.querySelector('.btn-carregar-mais')?.remove()
+        const btn = document.createElement('button')
+        btn.className   = 'btn-secondary btn-carregar-mais'
+        btn.textContent = `Carregar mais (${visiveis.length - fatia.length} restantes)`
+        btn.style.cssText = 'width:100%;margin-top:12px;font-size:12px;grid-column:1/-1;'
+        btn.onclick = () => { paginaAtual++; renderApuracoes() }
+        kanban?.appendChild(btn)
     }
 
     updateCounts(visiveis)
@@ -255,18 +278,19 @@ function renderApuracoes() {
 
 function createCard(ap) {
     const div = document.createElement('div')
-    div.className = `card ${ap.classificacao}`
+    div.className = `card ${ap.classificacao}${ap.urgente ? ' urgente' : ''}`
 
-    // Contador de tempo parado (apenas para "andamento" e "quente")
-    const tempoParado = ap.classificacao !== 'concluida' ? getTempoParado(ap.created_at) : null
+    const tempoParado  = ap.classificacao !== 'concluida' ? getTempoParado(ap.created_at) : null
     const alertaParado = tempoParado && tempoParado.horas >= 4
         ? `<div class="card-alerta">⚠️ Parado há ${tempoParado.texto}</div>`
         : tempoParado
             ? `<div class="card-tempo-parado">🕐 ${tempoParado.texto} sem movimentação</div>`
             : ''
 
+    const badgeUrgente = ap.urgente ? `<span class="badge-urgente">🔴 URGENTE</span>` : ''
+
     div.innerHTML = `
-        <div class="card-title">${ap.titulo}</div>
+        <div class="card-title">${badgeUrgente}${ap.titulo}</div>
         <div class="card-source">Fonte: ${ap.fonte}</div>
         <div class="card-description">${ap.descricao}</div>
         ${alertaParado}
@@ -283,14 +307,12 @@ function createCard(ap) {
     return div
 }
 
-// ---- Tempo parado ----
 function getTempoParado(created_at) {
     const diff  = Date.now() - new Date(created_at)
     const horas = Math.floor(diff / 3600000)
     const dias  = Math.floor(horas / 24)
     if (horas < 1) return null
-    const texto = dias >= 1 ? `${dias}d` : `${horas}h`
-    return { horas, texto }
+    return { horas, texto: dias >= 1 ? `${dias}d` : `${horas}h` }
 }
 
 function getActionButtons(ap) {
@@ -303,7 +325,6 @@ function getActionButtons(ap) {
     return `<button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">↻ Reabrir</button>`
 }
 
-// ---- Confirmação antes de concluir ----
 function confirmarConcluir(id) {
     const ap = apuracoes.find(a => a.id === id)
     if (!ap) return
@@ -324,6 +345,7 @@ async function moveCard(id, novaClassificacao) {
 function openModalApuracao() {
     editandoId = null
     document.getElementById('form-apuracao').reset()
+    document.getElementById('apuracao-urgente').checked          = false
     document.getElementById('modal-apuracao-titulo').textContent = 'Novo Registro de Apuração'
     document.getElementById('btn-salvar-apuracao').textContent   = 'Salvar Registro'
     document.getElementById('modal-apuracao').classList.add('active')
@@ -333,11 +355,12 @@ function abrirEdicao(id) {
     const ap = apuracoes.find(a => a.id === id)
     if (!ap) return
     editandoId = id
-    document.getElementById('apuracao-titulo').value        = ap.titulo
-    document.getElementById('apuracao-fonte').value         = ap.fonte
-    document.getElementById('apuracao-descricao').value     = ap.descricao
-    document.getElementById('apuracao-classificacao').value = ap.classificacao
-    document.getElementById('apuracao-link').value          = ap.link || ''
+    document.getElementById('apuracao-titulo').value            = ap.titulo
+    document.getElementById('apuracao-fonte').value             = ap.fonte
+    document.getElementById('apuracao-descricao').value         = ap.descricao
+    document.getElementById('apuracao-classificacao').value     = ap.classificacao
+    document.getElementById('apuracao-link').value              = ap.link || ''
+    document.getElementById('apuracao-urgente').checked         = ap.urgente || false
     document.getElementById('modal-apuracao-titulo').textContent = 'Editar Apuração'
     document.getElementById('btn-salvar-apuracao').textContent   = 'Salvar Alterações'
     document.getElementById('modal-apuracao').classList.add('active')
@@ -350,7 +373,8 @@ async function salvarApuracao(event) {
         fonte:         document.getElementById('apuracao-fonte').value,
         descricao:     document.getElementById('apuracao-descricao').value,
         classificacao: document.getElementById('apuracao-classificacao').value,
-        link:          document.getElementById('apuracao-link').value || null
+        link:          document.getElementById('apuracao-link').value || null,
+        urgente:       document.getElementById('apuracao-urgente').checked
     }
     if (editandoId) {
         const { data, error } = await db.from('apuracoes').update(dados).eq('id', editandoId).select().single()
@@ -364,12 +388,11 @@ async function salvarApuracao(event) {
         if (error) { alert('Erro ao salvar: ' + error.message); return }
         apuracoes.unshift(data)
         atualizarFiltroAutores()
-        await addToFeed(userData.nome, `Criou nova apuração: "${data.titulo}"`)
+        const prefixo = dados.urgente ? '🔴 URGENTE — ' : ''
+        await addToFeed(userData.nome, `${prefixo}Criou nova apuração: "${data.titulo}"`)
     }
     renderApuracoes(); renderRegistros()
-    closeModal('modal-apuracao')
-    event.target.reset()
-    editandoId = null
+    closeModal('modal-apuracao'); event.target.reset(); editandoId = null
 }
 
 async function deletarApuracao(id, titulo) {
@@ -377,8 +400,7 @@ async function deletarApuracao(id, titulo) {
     const { error } = await db.from('apuracoes').delete().eq('id', id)
     if (error) { alert('Erro ao deletar: ' + error.message); return }
     apuracoes = apuracoes.filter(a => a.id !== id)
-    atualizarFiltroAutores()
-    renderApuracoes(); renderRegistros()
+    atualizarFiltroAutores(); renderApuracoes(); renderRegistros()
     await addToFeed(userData.nome, `Removeu a apuração: "${titulo}"`)
 }
 
@@ -405,7 +427,11 @@ function renderRondas() {
                 <h3>${ronda.nome}</h3>
                 <div class="ronda-meta">${ronda.descricao || ''} • ${getPeriodicidadeLabel(ronda.periodicidade)}</div>
             </div>
-            <span class="ronda-status ${ronda.status}">${ronda.status.charAt(0).toUpperCase() + ronda.status.slice(1)}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="ronda-status ${ronda.status}">${ronda.status.charAt(0).toUpperCase() + ronda.status.slice(1)}</span>
+                <button class="btn-small btn-editar" onclick="abrirEdicaoRonda(${ronda.id})">✏️</button>
+                <button class="btn-small btn-deletar" onclick="deletarRonda(${ronda.id}, '${ronda.nome.replace(/'/g, "\\'")}')">🗑️</button>
+            </div>
         `
         list.appendChild(div)
     })
@@ -415,21 +441,56 @@ function getPeriodicidadeLabel(p) {
     return { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal', unica: 'Única' }[p] || p
 }
 
-function openModalRonda() { document.getElementById('modal-ronda').classList.add('active') }
+function openModalRonda() {
+    editandoRondaId = null
+    document.getElementById('form-ronda').reset()
+    document.getElementById('modal-ronda-titulo').textContent = 'Nova Ronda de Apuração'
+    document.getElementById('btn-salvar-ronda').textContent   = 'Criar Ronda'
+    document.getElementById('modal-ronda').classList.add('active')
+}
+
+function abrirEdicaoRonda(id) {
+    const ronda = rondas.find(r => r.id === id)
+    if (!ronda) return
+    editandoRondaId = id
+    document.getElementById('ronda-nome').value          = ronda.nome
+    document.getElementById('ronda-descricao').value     = ronda.descricao || ''
+    document.getElementById('ronda-periodicidade').value = ronda.periodicidade
+    document.getElementById('ronda-status').value        = ronda.status
+    document.getElementById('modal-ronda-titulo').textContent = 'Editar Ronda'
+    document.getElementById('btn-salvar-ronda').textContent   = 'Salvar Alterações'
+    document.getElementById('modal-ronda').classList.add('active')
+}
 
 async function salvarRonda(event) {
     event.preventDefault()
-    const nova = {
+    const dados = {
         nome:          document.getElementById('ronda-nome').value,
         descricao:     document.getElementById('ronda-descricao').value,
         periodicidade: document.getElementById('ronda-periodicidade').value,
         status:        document.getElementById('ronda-status').value
     }
-    const { data, error } = await db.from('rondas').insert([nova]).select().single()
-    if (error) { alert('Erro: ' + error.message); return }
-    rondas.unshift(data); renderRondas()
-    closeModal('modal-ronda'); event.target.reset()
-    await addToFeed(userData.nome, `Criou nova ronda: "${data.nome}"`)
+    if (editandoRondaId) {
+        const { data, error } = await db.from('rondas').update(dados).eq('id', editandoRondaId).select().single()
+        if (error) { alert('Erro ao editar: ' + error.message); return }
+        const idx = rondas.findIndex(r => r.id === editandoRondaId)
+        if (idx !== -1) rondas[idx] = data
+        await addToFeed(userData.nome, `Editou a ronda: "${data.nome}"`)
+    } else {
+        const { data, error } = await db.from('rondas').insert([dados]).select().single()
+        if (error) { alert('Erro: ' + error.message); return }
+        rondas.unshift(data)
+        await addToFeed(userData.nome, `Criou nova ronda: "${data.nome}"`)
+    }
+    renderRondas(); closeModal('modal-ronda'); event.target.reset(); editandoRondaId = null
+}
+
+async function deletarRonda(id, nome) {
+    if (!confirm(`Deletar a ronda "${nome}"? Esta ação não pode ser desfeita.`)) return
+    const { error } = await db.from('rondas').delete().eq('id', id)
+    if (error) { alert('Erro ao deletar: ' + error.message); return }
+    rondas = rondas.filter(r => r.id !== id); renderRondas()
+    await addToFeed(userData.nome, `Removeu a ronda: "${nome}"`)
 }
 
 // ==================== FONTES ====================
@@ -483,9 +544,9 @@ function toggleCampoDocumento() {
 function openModalFonte() {
     editandoFonteId = null
     document.getElementById('form-fonte').reset()
-    document.getElementById('campo-documento').style.display   = 'none'
-    document.getElementById('modal-fonte-titulo').textContent  = 'Novo Contato/Fonte'
-    document.getElementById('btn-salvar-fonte').textContent    = 'Salvar Contato'
+    document.getElementById('campo-documento').style.display  = 'none'
+    document.getElementById('modal-fonte-titulo').textContent = 'Novo Contato/Fonte'
+    document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Contato'
     document.getElementById('modal-fonte').classList.add('active')
 }
 
@@ -548,7 +609,7 @@ function renderRegistros() {
         div.className = 'registro-item'
         div.innerHTML = `
             <div class="registro-header">
-                <div class="registro-titulo">${ap.titulo}</div>
+                <div class="registro-titulo">${ap.urgente ? '🔴 ' : ''}${ap.titulo}</div>
                 <div class="registro-data">${formatDate(ap.created_at)}</div>
             </div>
             <div>${ap.descricao}</div>
@@ -628,7 +689,7 @@ function formatDate(ds) {
 window.onclick = e => { if (e.target.classList.contains('modal')) e.target.classList.remove('active') }
 
 document.addEventListener('input', e => {
-    if (e.target.id === 'search-rondas' || e.target.id === 'filter-status') renderRondas()
-    if (e.target.id === 'search-fontes' || e.target.id === 'filter-tipo')   renderFontes()
-    if (e.target.id === 'filter-autor') { paginaAtual = 0; renderApuracoes() }
+    if (e.target.id === 'search-rondas'  || e.target.id === 'filter-status') renderRondas()
+    if (e.target.id === 'search-fontes'  || e.target.id === 'filter-tipo')   renderFontes()
+    if (e.target.id === 'filter-autor'   || e.target.id === 'search-kanban') { paginaAtual = 0; renderApuracoes() }
 })
