@@ -5,49 +5,148 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
-// ==================== ESTADO LOCAL (cache) ====================
-let userData = JSON.parse(localStorage.getItem('userData')) || {
-    nome: 'Redação',
-    email: '',
-    cargo: 'Repórter',
-    telefone: '',
-    redacao: 'TV Morena / Morena FM',
-    notificacoes: true
-}
-
-let apuracoes = []
-let rondas    = []
-let fontes    = []
-let feedItems = []
+// ==================== ESTADO ====================
+let currentUser = null
+let userData    = {}
+let apuracoes   = []
+let rondas      = []
+let fontes      = []
+let feedItems   = []
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
+    // Verifica se já há sessão ativa
+    const { data: { session } } = await db.auth.getSession()
+
+    if (session) {
+        currentUser = session.user
+        await iniciarApp()
+    } else {
+        mostrarTela('tela-login')
+    }
+
+    // Listener de mudança de estado de auth
+    db.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN') {
+            currentUser = session.user
+            await iniciarApp()
+        } else if (event === 'SIGNED_OUT') {
+            currentUser = null
+            mostrarTela('tela-login')
+        }
+    })
+})
+
+async function iniciarApp() {
+    // Carrega nome do perfil salvo ou usa o e-mail como fallback
+    const salvo = JSON.parse(localStorage.getItem(`userData_${currentUser.id}`)) || {}
+    userData = {
+        nome:          salvo.nome          || currentUser.email.split('@')[0],
+        email:         currentUser.email,
+        cargo:         salvo.cargo         || 'Repórter',
+        telefone:      salvo.telefone      || '',
+        redacao:       salvo.redacao       || '',
+        notificacoes:  salvo.notificacoes  !== undefined ? salvo.notificacoes : true
+    }
+
+    mostrarTela('tela-app')
     carregarPerfil()
     setupNavegacao()
     await carregarTudo()
     setupRealtimeFeed()
-})
+}
 
-async function carregarTudo() {
-    await Promise.all([
-        carregarApuracoes(),
-        carregarRondas(),
-        carregarFontes(),
-        carregarFeed()
-    ])
-    updateCounts()
-    renderRegistros()
+// ==================== CONTROLE DE TELAS ====================
+function mostrarTela(id) {
+    document.querySelectorAll('.tela').forEach(t => t.classList.remove('active'))
+    document.getElementById(id).classList.add('active')
+}
+
+// ==================== AUTH: LOGIN ====================
+async function fazerLogin(event) {
+    event.preventDefault()
+    const email = document.getElementById('login-email').value
+    const senha = document.getElementById('login-senha').value
+    const btn   = document.getElementById('btn-login')
+    const erro  = document.getElementById('login-erro')
+
+    btn.textContent = 'Entrando...'
+    btn.disabled    = true
+    erro.textContent = ''
+
+    const { error } = await db.auth.signInWithPassword({ email, password: senha })
+
+    if (error) {
+        erro.textContent = traduzirErroAuth(error.message)
+        btn.textContent  = 'Entrar'
+        btn.disabled     = false
+    }
+    // Se OK, o onAuthStateChange cuida de iniciar o app
+}
+
+// ==================== AUTH: CADASTRO ====================
+async function fazerCadastro(event) {
+    event.preventDefault()
+    const nome  = document.getElementById('cadastro-nome').value
+    const email = document.getElementById('cadastro-email').value
+    const senha = document.getElementById('cadastro-senha').value
+    const btn   = document.getElementById('btn-cadastro')
+    const erro  = document.getElementById('cadastro-erro')
+    const ok    = document.getElementById('cadastro-ok')
+
+    btn.textContent  = 'Criando conta...'
+    btn.disabled     = true
+    erro.textContent = ''
+    ok.textContent   = ''
+
+    const { data, error } = await db.auth.signUp({
+        email,
+        password: senha,
+        options: { data: { nome } }
+    })
+
+    if (error) {
+        erro.textContent = traduzirErroAuth(error.message)
+        btn.textContent  = 'Criar conta'
+        btn.disabled     = false
+        return
+    }
+
+    // Salva o nome no localStorage vinculado ao user_id
+    if (data.user) {
+        localStorage.setItem(`userData_${data.user.id}`, JSON.stringify({ nome, cargo: 'Repórter', redacao: '' }))
+    }
+
+    ok.textContent  = '✅ Conta criada! Verifique seu e-mail para confirmar o acesso.'
+    btn.textContent = 'Criar conta'
+    btn.disabled    = false
+}
+
+// ==================== AUTH: LOGOUT ====================
+async function fazerLogout() {
+    await db.auth.signOut()
+}
+
+function traduzirErroAuth(msg) {
+    if (msg.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.'
+    if (msg.includes('Email not confirmed'))        return 'Confirme seu e-mail antes de entrar.'
+    if (msg.includes('User already registered'))    return 'Este e-mail já está cadastrado.'
+    if (msg.includes('Password should be'))         return 'A senha deve ter pelo menos 6 caracteres.'
+    return msg
+}
+
+function alternarParaCadastro() {
+    mostrarTela('tela-cadastro')
+}
+
+function alternarParaLogin() {
+    mostrarTela('tela-login')
 }
 
 // ==================== REALTIME - Feed ao vivo ====================
 function setupRealtimeFeed() {
     db.channel('feed-realtime')
-        .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'feed_items'
-        }, (payload) => {
-            // Adiciona novo item ao cache e re-renderiza sem buscar tudo de novo
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_items' }, (payload) => {
             feedItems.unshift(payload.new)
             renderFeed()
         })
@@ -57,55 +156,49 @@ function setupRealtimeFeed() {
 // ==================== NAVEGAÇÃO ====================
 function setupNavegacao() {
     const menuItems = document.querySelectorAll('.menu-item')
-    
     menuItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault()
             const page = item.getAttribute('data-page')
-            
             menuItems.forEach(mi => mi.classList.remove('active'))
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
-            
             item.classList.add('active')
             document.getElementById(`page-${page}`).classList.add('active')
         })
     })
 }
 
-// ==================== PERFIL (localStorage — dados pessoais do usuário) ====================
+// ==================== PERFIL ====================
 function carregarPerfil() {
-    document.getElementById('user-name-display').textContent = userData.nome
-    document.getElementById('user-role-display').textContent = userData.cargo
-    document.getElementById('user-avatar').textContent = getIniciais(userData.nome)
-    
-    document.getElementById('perfil-nome').value          = userData.nome
-    document.getElementById('perfil-email').value         = userData.email
-    document.getElementById('perfil-cargo').value         = userData.cargo
-    document.getElementById('perfil-telefone').value      = userData.telefone
-    document.getElementById('perfil-redacao').value       = userData.redacao
-    document.getElementById('perfil-notificacoes').checked = userData.notificacoes
+    document.getElementById('user-name-display').textContent  = userData.nome
+    document.getElementById('user-role-display').textContent  = userData.cargo
+    document.getElementById('user-avatar').textContent        = getIniciais(userData.nome)
+    document.getElementById('perfil-nome').value              = userData.nome
+    document.getElementById('perfil-email').value             = userData.email
+    document.getElementById('perfil-cargo').value             = userData.cargo
+    document.getElementById('perfil-telefone').value          = userData.telefone
+    document.getElementById('perfil-redacao').value           = userData.redacao
+    document.getElementById('perfil-notificacoes').checked    = userData.notificacoes
 }
 
 function salvarPerfil(event) {
     event.preventDefault()
-    
     userData = {
-        nome:          document.getElementById('perfil-nome').value,
-        email:         document.getElementById('perfil-email').value,
-        cargo:         document.getElementById('perfil-cargo').value,
-        telefone:      document.getElementById('perfil-telefone').value,
-        redacao:       document.getElementById('perfil-redacao').value,
-        notificacoes:  document.getElementById('perfil-notificacoes').checked
+        nome:         document.getElementById('perfil-nome').value,
+        email:        userData.email,
+        cargo:        document.getElementById('perfil-cargo').value,
+        telefone:     document.getElementById('perfil-telefone').value,
+        redacao:      document.getElementById('perfil-redacao').value,
+        notificacoes: document.getElementById('perfil-notificacoes').checked
     }
-    
-    localStorage.setItem('userData', JSON.stringify(userData))
+    localStorage.setItem(`userData_${currentUser.id}`, JSON.stringify(userData))
     carregarPerfil()
-    alert('✅ Perfil salvo com sucesso!')
+    alert('✅ Perfil salvo!')
 }
 
 function limparDados() {
-    if (confirm('⚠️ Tem certeza? Isso apaga apenas seu perfil local. Os dados da redação ficam no servidor.')) {
-        localStorage.clear()
+    if (confirm('Apagar seu perfil local? Os dados da redação ficam no servidor.')) {
+        localStorage.removeItem(`userData_${currentUser.id}`)
         location.reload()
     }
 }
@@ -114,15 +207,17 @@ function getIniciais(nome) {
     return nome.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
 }
 
+// ==================== CARREGAMENTO GERAL ====================
+async function carregarTudo() {
+    await Promise.all([carregarApuracoes(), carregarRondas(), carregarFontes(), carregarFeed()])
+    updateCounts()
+    renderRegistros()
+}
+
 // ==================== APURAÇÕES ====================
 async function carregarApuracoes() {
-    const { data, error } = await db
-        .from('apuracoes')
-        .select('*')
-        .order('created_at', { ascending: false })
-    
-    if (error) { console.error('Erro ao carregar apurações:', error); return }
-    
+    const { data, error } = await db.from('apuracoes').select('*').order('created_at', { ascending: false })
+    if (error) { console.error(error); return }
     apuracoes = data
     renderApuracoes()
 }
@@ -133,14 +228,11 @@ function renderApuracoes() {
         quente:    document.getElementById('column-quente'),
         concluida: document.getElementById('column-concluida')
     }
-    
     Object.values(columns).forEach(col => col.innerHTML = '')
-    
-    apuracoes.forEach(apuracao => {
-        const col = columns[apuracao.classificacao]
-        if (col) col.appendChild(createCard(apuracao))
+    apuracoes.forEach(ap => {
+        const col = columns[ap.classificacao]
+        if (col) col.appendChild(createCard(ap))
     })
-    
     updateCounts()
 }
 
@@ -155,70 +247,46 @@ function createCard(apuracao) {
             <span>${formatDate(apuracao.created_at)}</span>
             <span>${apuracao.autor}</span>
         </div>
-        <div class="card-actions">
-            ${getActionButtons(apuracao)}
-        </div>
+        <div class="card-actions">${getActionButtons(apuracao)}</div>
     `
     return div
 }
 
-function getActionButtons(apuracao) {
-    if (apuracao.classificacao === 'andamento') {
-        return `
-            <button class="btn-small" onclick="moveCard(${apuracao.id}, 'quente')">Marcar Factual</button>
-            <button class="btn-small" onclick="moveCard(${apuracao.id}, 'concluida')">Concluir</button>
-        `
-    } else if (apuracao.classificacao === 'quente') {
-        return `
-            <button class="btn-small" onclick="moveCard(${apuracao.id}, 'andamento')">Voltar</button>
-            <button class="btn-small" onclick="moveCard(${apuracao.id}, 'concluida')">Concluir</button>
-        `
-    } else {
-        return `<button class="btn-small" onclick="moveCard(${apuracao.id}, 'andamento')">↻ Reabrir</button>`
-    }
+function getActionButtons(ap) {
+    if (ap.classificacao === 'andamento') return `
+        <button class="btn-small" onclick="moveCard(${ap.id}, 'quente')">Marcar Factual</button>
+        <button class="btn-small" onclick="moveCard(${ap.id}, 'concluida')">Concluir</button>`
+    if (ap.classificacao === 'quente') return `
+        <button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">Voltar</button>
+        <button class="btn-small" onclick="moveCard(${ap.id}, 'concluida')">Concluir</button>`
+    return `<button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">↻ Reabrir</button>`
 }
 
 async function moveCard(id, novaClassificacao) {
-    const labels = { andamento: 'Em Andamento', quente: 'Factual', concluida: 'Concluída' }
+    const labels  = { andamento: 'Em Andamento', quente: 'Factual', concluida: 'Concluída' }
     const apuracao = apuracoes.find(a => a.id === id)
     if (!apuracao) return
-    
-    const { error } = await db
-        .from('apuracoes')
-        .update({ classificacao: novaClassificacao })
-        .eq('id', id)
-    
-    if (error) { alert('Erro ao mover card: ' + error.message); return }
-    
+    const { error } = await db.from('apuracoes').update({ classificacao: novaClassificacao }).eq('id', id)
+    if (error) { alert('Erro: ' + error.message); return }
     apuracao.classificacao = novaClassificacao
     renderApuracoes()
     await addToFeed(userData.nome, `Moveu "${apuracao.titulo}" para ${labels[novaClassificacao]}`)
 }
 
-function openModalApuracao() {
-    document.getElementById('modal-apuracao').classList.add('active')
-}
+function openModalApuracao() { document.getElementById('modal-apuracao').classList.add('active') }
 
 async function salvarApuracao(event) {
     event.preventDefault()
-    
-    const novaApuracao = {
-        titulo:         document.getElementById('apuracao-titulo').value,
-        fonte:          document.getElementById('apuracao-fonte').value,
-        descricao:      document.getElementById('apuracao-descricao').value,
-        classificacao:  document.getElementById('apuracao-classificacao').value,
-        link:           document.getElementById('apuracao-link').value || null,
-        autor:          userData.nome
+    const nova = {
+        titulo:        document.getElementById('apuracao-titulo').value,
+        fonte:         document.getElementById('apuracao-fonte').value,
+        descricao:     document.getElementById('apuracao-descricao').value,
+        classificacao: document.getElementById('apuracao-classificacao').value,
+        link:          document.getElementById('apuracao-link').value || null,
+        autor:         userData.nome
     }
-    
-    const { data, error } = await db
-        .from('apuracoes')
-        .insert([novaApuracao])
-        .select()
-        .single()
-    
-    if (error) { alert('Erro ao salvar apuração: ' + error.message); return }
-    
+    const { data, error } = await db.from('apuracoes').insert([nova]).select().single()
+    if (error) { alert('Erro: ' + error.message); return }
     apuracoes.unshift(data)
     renderApuracoes()
     await addToFeed(userData.nome, `Criou nova apuração: "${data.titulo}"`)
@@ -228,13 +296,8 @@ async function salvarApuracao(event) {
 
 // ==================== RONDAS ====================
 async function carregarRondas() {
-    const { data, error } = await db
-        .from('rondas')
-        .select('*')
-        .order('created_at', { ascending: false })
-    
-    if (error) { console.error('Erro ao carregar rondas:', error); return }
-    
+    const { data, error } = await db.from('rondas').select('*').order('created_at', { ascending: false })
+    if (error) { console.error(error); return }
     rondas = data
     renderRondas()
 }
@@ -242,23 +305,13 @@ async function carregarRondas() {
 function renderRondas() {
     const list = document.getElementById('rondas-list')
     if (!list) return
-    
     list.innerHTML = ''
-    
-    const search       = document.getElementById('search-rondas')?.value.toLowerCase() || ''
-    const statusFilter = document.getElementById('filter-status')?.value || ''
-    
-    const filtradas = rondas.filter(r => {
-        const matchSearch = r.nome.toLowerCase().includes(search)
-        const matchStatus = !statusFilter || r.status === statusFilter
-        return matchSearch && matchStatus
-    })
-    
-    if (filtradas.length === 0) {
-        list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhuma ronda encontrada.</p>'
-        return
-    }
-    
+    const search  = document.getElementById('search-rondas')?.value.toLowerCase() || ''
+    const filtro  = document.getElementById('filter-status')?.value || ''
+    const filtradas = rondas.filter(r =>
+        r.nome.toLowerCase().includes(search) && (!filtro || r.status === filtro)
+    )
+    if (!filtradas.length) { list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhuma ronda encontrada.</p>'; return }
     filtradas.forEach(ronda => {
         const div = document.createElement('div')
         div.className = 'ronda-item'
@@ -274,32 +327,21 @@ function renderRondas() {
 }
 
 function getPeriodicidadeLabel(p) {
-    const labels = { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal', unica: 'Única' }
-    return labels[p] || p
+    return { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal', unica: 'Única' }[p] || p
 }
 
-function openModalRonda() {
-    document.getElementById('modal-ronda').classList.add('active')
-}
+function openModalRonda() { document.getElementById('modal-ronda').classList.add('active') }
 
 async function salvarRonda(event) {
     event.preventDefault()
-    
-    const novaRonda = {
+    const nova = {
         nome:          document.getElementById('ronda-nome').value,
         descricao:     document.getElementById('ronda-descricao').value,
         periodicidade: document.getElementById('ronda-periodicidade').value,
         status:        document.getElementById('ronda-status').value
     }
-    
-    const { data, error } = await db
-        .from('rondas')
-        .insert([novaRonda])
-        .select()
-        .single()
-    
-    if (error) { alert('Erro ao salvar ronda: ' + error.message); return }
-    
+    const { data, error } = await db.from('rondas').insert([nova]).select().single()
+    if (error) { alert('Erro: ' + error.message); return }
     rondas.unshift(data)
     renderRondas()
     closeModal('modal-ronda')
@@ -309,13 +351,8 @@ async function salvarRonda(event) {
 
 // ==================== FONTES ====================
 async function carregarFontes() {
-    const { data, error } = await db
-        .from('fontes')
-        .select('*')
-        .order('created_at', { ascending: false })
-    
-    if (error) { console.error('Erro ao carregar fontes:', error); return }
-    
+    const { data, error } = await db.from('fontes').select('*').order('created_at', { ascending: false })
+    if (error) { console.error(error); return }
     fontes = data
     renderFontes()
 }
@@ -323,23 +360,13 @@ async function carregarFontes() {
 function renderFontes() {
     const list = document.getElementById('fontes-list')
     if (!list) return
-    
     list.innerHTML = ''
-    
-    const search     = document.getElementById('search-fontes')?.value.toLowerCase() || ''
-    const tipoFilter = document.getElementById('filter-tipo')?.value || ''
-    
-    const filtradas = fontes.filter(f => {
-        const matchSearch = f.nome.toLowerCase().includes(search)
-        const matchTipo   = !tipoFilter || f.tipo === tipoFilter
-        return matchSearch && matchTipo
-    })
-    
-    if (filtradas.length === 0) {
-        list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhum contato encontrado.</p>'
-        return
-    }
-    
+    const search = document.getElementById('search-fontes')?.value.toLowerCase() || ''
+    const filtro = document.getElementById('filter-tipo')?.value || ''
+    const filtradas = fontes.filter(f =>
+        f.nome.toLowerCase().includes(search) && (!filtro || f.tipo === filtro)
+    )
+    if (!filtradas.length) { list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhum contato encontrado.</p>'; return }
     filtradas.forEach(fonte => {
         const div = document.createElement('div')
         div.className = 'fonte-card'
@@ -349,10 +376,7 @@ function renderFontes() {
                 <span class="fonte-tipo">${getTipoLabel(fonte.tipo)}</span>
             </div>
             <div class="fonte-contato">📞 ${fonte.contato || 'Não informado'}</div>
-            <div class="fonte-confianca">
-                <strong>Confiança:</strong>
-                <span class="confianca-${fonte.confianca}">${getConfiancaLabel(fonte.confianca)}</span>
-            </div>
+            <div class="fonte-confianca"><strong>Confiança:</strong> <span class="confianca-${fonte.confianca}">${getConfiancaLabel(fonte.confianca)}</span></div>
             ${fonte.obs ? `<div style="margin-top:8px;font-size:12px;color:#718096;">${fonte.obs}</div>` : ''}
         `
         list.appendChild(div)
@@ -360,29 +384,23 @@ function renderFontes() {
 }
 
 function getTipoLabel(tipo) {
-    const labels = { pessoa: 'Pessoa', orgao: 'Órgão', site: 'Site', 'rede-social': 'Rede Social', documento: 'Documento' }
-    return labels[tipo] || tipo
+    return { pessoa: 'Pessoa', orgao: 'Órgão', site: 'Site', 'rede-social': 'Rede Social', documento: 'Documento' }[tipo] || tipo
 }
 
-function getConfiancaLabel(confianca) {
-    const labels = { alta: '🟢 Alta', media: '🟡 Média', baixa: '🔴 Baixa' }
-    return labels[confianca]
+function getConfiancaLabel(c) {
+    return { alta: '🟢 Alta', media: '🟡 Média', baixa: '🔴 Baixa' }[c]
 }
 
 function toggleCampoDocumento() {
-    const tipo  = document.getElementById('fonte-tipo').value
-    const campo = document.getElementById('campo-documento')
-    campo.style.display = tipo === 'documento' ? 'block' : 'none'
+    document.getElementById('campo-documento').style.display =
+        document.getElementById('fonte-tipo').value === 'documento' ? 'block' : 'none'
 }
 
-function openModalFonte() {
-    document.getElementById('modal-fonte').classList.add('active')
-}
+function openModalFonte() { document.getElementById('modal-fonte').classList.add('active') }
 
 async function salvarFonte(event) {
     event.preventDefault()
-    
-    const novaFonte = {
+    const nova = {
         nome:      document.getElementById('fonte-nome').value,
         tipo:      document.getElementById('fonte-tipo').value,
         contato:   document.getElementById('fonte-contato').value,
@@ -390,15 +408,8 @@ async function salvarFonte(event) {
         link:      document.getElementById('fonte-link').value || null,
         obs:       document.getElementById('fonte-obs').value
     }
-    
-    const { data, error } = await db
-        .from('fontes')
-        .insert([novaFonte])
-        .select()
-        .single()
-    
-    if (error) { alert('Erro ao salvar fonte: ' + error.message); return }
-    
+    const { data, error } = await db.from('fontes').insert([nova]).select().single()
+    if (error) { alert('Erro: ' + error.message); return }
     fontes.unshift(data)
     renderFontes()
     closeModal('modal-fonte')
@@ -410,12 +421,8 @@ async function salvarFonte(event) {
 function renderRegistros() {
     const list = document.getElementById('registros-list')
     if (!list) return
-    
     list.innerHTML = ''
-    
-    const ordenadas = [...apuracoes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    
-    ordenadas.forEach(ap => {
+    ;[...apuracoes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).forEach(ap => {
         const div = document.createElement('div')
         div.className = 'registro-item'
         div.innerHTML = `
@@ -425,45 +432,23 @@ function renderRegistros() {
             </div>
             <div>${ap.descricao}</div>
             <div style="margin-top:8px;font-size:12px;color:#718096;">
-                Fonte: ${ap.fonte} • Por: ${ap.autor} • Status: ${getClassificacaoLabel(ap.classificacao)}
+                Fonte: ${ap.fonte} • Por: ${ap.autor} • Status: ${{ andamento: 'Em Andamento', quente: 'Factual', concluida: 'Concluída' }[ap.classificacao]}
             </div>
         `
         list.appendChild(div)
     })
 }
 
-function getClassificacaoLabel(c) {
-    const labels = { andamento: 'Em Andamento', quente: 'Factual', concluida: 'Concluída' }
-    return labels[c]
-}
-
 function exportarRegistros() {
-    const dados = {
-        data:      new Date().toISOString(),
-        usuario:   userData.nome,
-        apuracoes: apuracoes,
-        rondas:    rondas,
-        fontes:    fontes
-    }
-    
-    const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
-    a.download = `backup-ronda-${new Date().toISOString().split('T')[0]}.json`
+    const blob = new Blob([JSON.stringify({ data: new Date().toISOString(), usuario: userData.nome, apuracoes, rondas, fontes }, null, 2)], { type: 'application/json' })
+    const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `backup-ronda-${new Date().toISOString().split('T')[0]}.json` })
     a.click()
 }
 
-// ==================== FEED / MURAL DA REDAÇÃO ====================
+// ==================== FEED ====================
 async function carregarFeed() {
-    const { data, error } = await db
-        .from('feed_items')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(30)
-    
-    if (error) { console.error('Erro ao carregar feed:', error); return }
-    
+    const { data, error } = await db.from('feed_items').select('*').order('created_at', { ascending: false }).limit(30)
+    if (error) { console.error(error); return }
     feedItems = data
     renderFeed()
 }
@@ -471,9 +456,7 @@ async function carregarFeed() {
 function renderFeed() {
     const list = document.getElementById('feed-list')
     if (!list) return
-    
     list.innerHTML = ''
-    
     feedItems.forEach(item => {
         const div = document.createElement('div')
         div.className = 'feed-item'
@@ -490,14 +473,8 @@ function renderFeed() {
 }
 
 async function addToFeed(autor, conteudo, anexo = null) {
-    const novoItem = { autor, conteudo, anexo }
-    
-    const { error } = await db
-        .from('feed_items')
-        .insert([novoItem])
-    
-    if (error) console.error('Erro ao salvar no feed:', error)
-    // O realtime listener cuida de atualizar a UI automaticamente
+    const { error } = await db.from('feed_items').insert([{ autor, conteudo, anexo }])
+    if (error) console.error(error)
 }
 
 // ==================== UTILITÁRIOS ====================
@@ -507,32 +484,20 @@ function updateCounts() {
     document.getElementById('count-concluida').textContent = apuracoes.filter(a => a.classificacao === 'concluida').length
 }
 
-function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('active')
+function closeModal(id) { document.getElementById(id).classList.remove('active') }
+
+function formatDate(ds) {
+    const d = new Date(ds), now = new Date(), diff = now - d
+    const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000)
+    if (m < 1)  return 'Agora'
+    if (m < 60) return `${m}min atrás`
+    if (h < 24) return `${h}h atrás`
+    return d.toLocaleDateString('pt-BR')
 }
 
-function formatDate(dateString) {
-    const date    = new Date(dateString)
-    const now     = new Date()
-    const diff    = now - date
-    const minutes = Math.floor(diff / 60000)
-    const hours   = Math.floor(diff / 3600000)
-    
-    if (minutes < 1)  return 'Agora'
-    if (minutes < 60) return `${minutes}min atrás`
-    if (hours < 24)   return `${hours}h atrás`
-    return date.toLocaleDateString('pt-BR')
-}
+window.onclick = e => { if (e.target.classList.contains('modal')) e.target.classList.remove('active') }
 
-// Fechar modal ao clicar fora
-window.onclick = function(event) {
-    if (event.target.classList.contains('modal')) {
-        event.target.classList.remove('active')
-    }
-}
-
-// Filtros em tempo real
-document.addEventListener('input', (e) => {
+document.addEventListener('input', e => {
     if (e.target.id === 'search-rondas' || e.target.id === 'filter-status') renderRondas()
     if (e.target.id === 'search-fontes' || e.target.id === 'filter-tipo')   renderFontes()
 })
