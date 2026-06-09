@@ -857,3 +857,31 @@ body {
     .content-box { margin: 0 16px 16px; }
     .kanban-wrap { padding: 16px; }
 }
+
+/* ===== FONTE CARD — novo layout ===== */
+.fonte-cidade {
+    font-size: 11px;
+    color: var(--text-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+.fonte-funcao {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-2);
+    margin-bottom: 8px;
+}
+
+.fonte-obs {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 8px;
+    font-style: italic;
+}
+
+/* Remove filtro de tipo que não existe mais */
+#filter-tipo { display: none; }
