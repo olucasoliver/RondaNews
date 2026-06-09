@@ -342,45 +342,63 @@
                             <button class="btn-primary" onclick="openModalApuracao()" style="height:30px;font-size:12px;">+ Novo registro</button>
                         </div>
                     </div>
-                    <div class="stats-strip">
-                        <div class="stat-item"><span class="stat-n" id="count-andamento">0</span><span class="stat-l">Em andamento</span></div>
-                        <div class="stat-item"><span class="stat-n" id="count-quente">0</span><span class="stat-l">Factual</span></div>
-                        <div class="stat-item"><span class="stat-n" id="count-concluida">0</span><span class="stat-l">Concluída</span></div>
-                    </div>
                     <div class="dashboard-body">
                         <div class="kanban-wrap">
                             <div class="kanban-board">
                                 <div class="kanban-column">
                                     <div class="column-header em-andamento">
-                                        <h3><span class="col-dot col-dot-blue"></span>Em andamento</h3>
+                                        <div class="col-hd-left">
+                                            <div class="col-icon col-icon-blue">⏱</div>
+                                            <div>
+                                                <div class="col-title">Em andamento</div>
+                                                <div class="col-sub" id="sub-andamento">0 apurações</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-badge col-badge-blue" id="count-andamento">0</div>
                                     </div>
                                     <div class="column-content" id="column-andamento"></div>
                                 </div>
                                 <div class="kanban-column">
                                     <div class="column-header factual">
-                                        <h3><span class="col-dot col-dot-amber"></span>Factual</h3>
+                                        <div class="col-hd-left">
+                                            <div class="col-icon col-icon-amber">⚡</div>
+                                            <div>
+                                                <div class="col-title">Factual</div>
+                                                <div class="col-sub" id="sub-quente">0 apurações</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-badge col-badge-amber" id="count-quente">0</div>
                                     </div>
                                     <div class="column-content" id="column-quente"></div>
                                 </div>
                                 <div class="kanban-column">
                                     <div class="column-header concluida">
-                                        <h3><span class="col-dot col-dot-green"></span>Concluída</h3>
+                                        <div class="col-hd-left">
+                                            <div class="col-icon col-icon-green">✓</div>
+                                            <div>
+                                                <div class="col-title">Concluída</div>
+                                                <div class="col-sub" id="sub-concluida">0 apurações</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-badge col-badge-green" id="count-concluida">0</div>
                                     </div>
                                     <div class="column-content" id="column-concluida"></div>
                                 </div>
                             </div>
                         </div>
                         <aside class="feed-sidebar">
-                            <!-- RANKING DO MÊS -->
                             <div class="ranking-panel">
-                                <div class="ranking-header">
-                                    <span class="ranking-title">Ranking do Mês</span>
-                                    <span class="ranking-mes" id="ranking-mes"></span>
+                                <div class="panel-hd">
+                                    <span style="font-size:15px">🏆</span>
+                                    <span class="panel-hd-title">Ranking do mês</span>
+                                    <span class="panel-hd-mes" id="ranking-mes"></span>
                                 </div>
                                 <div class="ranking-list" id="ranking-list"></div>
                             </div>
-                            <!-- MURAL -->
-                            <h2>Mural da redação</h2>
+                            <div class="panel-hd">
+                                <span style="font-size:14px;color:var(--blue)">💬</span>
+                                <span class="panel-hd-title">Mural da redação</span>
+                            </div>
                             <div class="feed-list" id="feed-list"></div>
                             <form class="mural-form" onsubmit="postarNoMural(event)">
                                 <input type="text" id="mural-input" placeholder="Postar no mural..." class="search-input">
