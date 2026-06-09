@@ -226,6 +226,8 @@ async function carregarTudo() {
     updateCounts()
     renderRegistros()
     atualizarFiltroAutores()
+    calcularRanking()
+    verificarVirадаMes()
 }
 
 // ==================== APURAÇÕES ====================
@@ -601,6 +603,141 @@ async function deletarFonte(id, nome) {
     if (error) { alert('Erro ao deletar: ' + error.message); return }
     fontes = fontes.filter(f => f.id !== id); renderFontes()
     await addToFeed(userData.nome, `Removeu o contato: "${nome}"`)
+}
+
+
+// ==================== RANKING DO MÊS ====================
+function calcularRanking() {
+    const agora    = new Date()
+    const mesAtual = agora.getMonth()
+    const anoAtual = agora.getFullYear()
+    const mesPrev  = mesAtual === 0 ? 11 : mesAtual - 1
+    const anoPrev  = mesAtual === 0 ? anoAtual - 1 : anoAtual
+
+    const nomeMes = agora.toLocaleDateString('pt-BR', { month: 'long' })
+    const el = document.getElementById('ranking-mes')
+    if (el) el.textContent = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)
+
+    // Apurações do mês atual
+    const apsMes = apuracoes.filter(a => {
+        const d = new Date(a.created_at)
+        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
+    })
+
+    // Apurações do mês anterior (para indicador "em alta")
+    const apsPrev = apuracoes.filter(a => {
+        const d = new Date(a.created_at)
+        return d.getMonth() === mesPrev && d.getFullYear() === anoPrev
+    })
+
+    // Fontes do mês atual
+    const fontesMes = fontes.filter(f => {
+        const d = new Date(f.created_at)
+        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
+    })
+
+    // Agrupa por autor
+    const autores = {}
+
+    apsMes.forEach(a => {
+        if (!autores[a.autor]) autores[a.autor] = { nome: a.autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
+        autores[a.autor].aps++
+        if (a.classificacao === 'concluida') autores[a.autor].concluidas++
+        if (a.urgente && a.classificacao === 'concluida') autores[a.autor].urgentes++
+    })
+
+    // Fontes adicionadas por cada um (usa userData.nome como proxy — fontes não têm autor direto)
+    // Contamos apenas fontes deste mês associadas ao feed
+    fontesMes.forEach(f => {
+        // Tenta encontrar no feed quem adicionou
+        const feedEntry = feedItems.find(fi =>
+            fi.conteudo && fi.conteudo.includes(f.nome) && fi.conteudo.includes('contato')
+        )
+        const autor = feedEntry ? feedEntry.autor : null
+        if (autor) {
+            if (!autores[autor]) autores[autor] = { nome: autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
+            autores[autor].fontes++
+        }
+    })
+
+    // Mês anterior por autor
+    apsPrev.forEach(a => {
+        if (!autores[a.autor]) autores[a.autor] = { nome: a.autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
+        autores[a.autor].prevAps++
+    })
+
+    // Score total: apurações + fontes + urgentes*2
+    const ranking = Object.values(autores)
+        .map(a => ({ ...a, score: a.aps + a.fontes + (a.urgentes * 2) }))
+        .sort((a, b) => b.score - a.score)
+
+    renderRanking(ranking)
+}
+
+function renderRanking(ranking) {
+    const list = document.getElementById('ranking-list')
+    if (!list) return
+    list.innerHTML = ''
+
+    if (!ranking.length) {
+        list.innerHTML = '<div class="ranking-empty">Nenhuma atividade este mês ainda.</div>'
+        return
+    }
+
+    const medalhas = ['🥇', '🥈', '🥉']
+
+    ranking.forEach((rep, idx) => {
+        const medalha    = idx < 3 ? medalhas[idx] : `${idx + 1}.`
+        const emAlta     = rep.aps > rep.prevAps && rep.prevAps > 0
+        const badgeUrgente = rep.urgentes > 0 ? `<span class="badge-rank-urgente" title="Urgentes concluídas">🔴 ${rep.urgentes}</span>` : ''
+        const badgeAlta    = emAlta ? `<span class="badge-rank-alta" title="Em alta vs mês anterior">↑</span>` : ''
+
+        const div = document.createElement('div')
+        div.className = `ranking-item${idx === 0 ? ' ranking-primeiro' : ''}`
+        div.innerHTML = `
+            <div class="ranking-pos">${medalha}</div>
+            <div class="ranking-info">
+                <div class="ranking-nome">${rep.nome} ${badgeAlta} ${badgeUrgente}</div>
+                <div class="ranking-stats">
+                    <span title="Apurações">${rep.aps} apurações</span>
+                    ${rep.fontes > 0 ? `<span title="Fontes adicionadas">· ${rep.fontes} fontes</span>` : ''}
+                    ${rep.concluidas > 0 ? `<span title="Concluídas">· ${rep.concluidas} concluídas</span>` : ''}
+                </div>
+            </div>
+            <div class="ranking-score">${rep.score}</div>
+        `
+        list.appendChild(div)
+    })
+}
+
+// Post automático no mural na virada do mês
+function verificarVirадаMes() {
+    const agora    = new Date()
+    const chave    = `ranking_postado_${agora.getFullYear()}_${agora.getMonth()}`
+    if (localStorage.getItem(chave)) return
+    if (agora.getDate() !== 1) return // só no dia 1
+
+    // Calcula ranking do mês anterior para postar
+    const mesPrev  = agora.getMonth() === 0 ? 11 : agora.getMonth() - 1
+    const anoPrev  = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear()
+    const nomeMes  = new Date(anoPrev, mesPrev, 1).toLocaleDateString('pt-BR', { month: 'long' })
+
+    const apsPrev = apuracoes.filter(a => {
+        const d = new Date(a.created_at)
+        return d.getMonth() === mesPrev && d.getFullYear() === anoPrev
+    })
+
+    if (!apsPrev.length) return
+
+    const contagem = {}
+    apsPrev.forEach(a => { contagem[a.autor] = (contagem[a.autor] || 0) + 1 })
+    const top = Object.entries(contagem).sort((a, b) => b[1] - a[1])
+    if (!top.length) return
+
+    const [nome, qtd] = top[0]
+    const msg = `🏆 Ranking de ${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}: ${nome} foi o destaque com ${qtd} apurações!`
+    addToFeed('Sistema', msg)
+    localStorage.setItem(chave, '1')
 }
 
 // ==================== REGISTROS ====================
