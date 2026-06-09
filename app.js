@@ -348,13 +348,38 @@ function getTempoParado(created_at) {
 }
 
 function getActionButtons(ap) {
+    const moreId = `more-${ap.id}`
+    const menuId = `menu-${ap.id}`
+    const moreBtn = `<button class="btn-more" onclick="toggleMore('${menuId}')" title="Mais ações">⋯</button>
+        <div class="card-more-menu" id="${menuId}">
+            <div class="card-more-item" onclick="abrirEdicao(${ap.id});fecharMore('${menuId}')">✏️ Editar</div>
+            <div class="card-more-item danger" onclick="deletarApuracao(${ap.id}, '${ap.titulo.replace(/'/g, "\'")}');fecharMore('${menuId}')">🗑️ Excluir</div>
+        </div>`
+
     if (ap.classificacao === 'andamento') return `
-        <button class="btn-small" onclick="moveCard(${ap.id}, 'quente')">Marcar Factual</button>
-        <button class="btn-small" onclick="confirmarConcluir(${ap.id})">Concluir</button>`
+        <button class="btn-action-primary" onclick="moveCard(${ap.id}, 'quente')">Marcar Factual</button>
+        <button class="btn-action-secondary" onclick="confirmarConcluir(${ap.id})">Concluir</button>
+        ${moreBtn}`
     if (ap.classificacao === 'quente') return `
-        <button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">Voltar</button>
-        <button class="btn-small" onclick="confirmarConcluir(${ap.id})">Concluir</button>`
-    return `<button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">↻ Reabrir</button>`
+        <button class="btn-action-primary btn-action-primary-amber" onclick="confirmarConcluir(${ap.id})">Concluir</button>
+        <button class="btn-action-secondary" onclick="moveCard(${ap.id}, 'andamento')">Voltar</button>
+        ${moreBtn}`
+    return `
+        <button class="btn-action-secondary" onclick="moveCard(${ap.id}, 'andamento')">↻ Reabrir</button>
+        ${moreBtn}`
+}
+
+function toggleMore(menuId) {
+    const menu = document.getElementById(menuId)
+    if (!menu) return
+    const isOpen = menu.classList.contains('open')
+    document.querySelectorAll('.card-more-menu.open').forEach(m => m.classList.remove('open'))
+    if (!isOpen) menu.classList.add('open')
+}
+
+function fecharMore(menuId) {
+    const menu = document.getElementById(menuId)
+    if (menu) menu.classList.remove('open')
 }
 
 function confirmarConcluir(id) {
@@ -795,15 +820,24 @@ function renderFeed() {
     if (!list) return
     list.innerHTML = ''
     feedItems.forEach(item => {
+        // Cor do dot baseada no tipo de ação
+        let dotColor = 'var(--blue)'
+        if (item.conteudo && item.conteudo.includes('Concluí')) dotColor = 'var(--green-dark)'
+        else if (item.conteudo && item.conteudo.includes('fonte') || item.conteudo && item.conteudo.includes('contato')) dotColor = 'var(--amber-dark)'
+        else if (item.conteudo && item.conteudo.includes('URGENTE')) dotColor = 'var(--red)'
+
         const div = document.createElement('div')
         div.className = 'feed-item'
         div.innerHTML = `
-            <div class="feed-header">
-                <span class="feed-author">${item.autor}</span>
-                <span class="feed-time">${formatDate(item.created_at)}</span>
+            <div class="feed-dot" style="background:${dotColor}"></div>
+            <div class="feed-item-body">
+                <div class="feed-header">
+                    <span class="feed-author">${item.autor}</span>
+                    <span class="feed-time">${formatDate(item.created_at)}</span>
+                </div>
+                <div class="feed-content">${item.conteudo}</div>
+                ${item.anexo ? `<div class="feed-attachment">📎 ${item.anexo}</div>` : ''}
             </div>
-            <div class="feed-content">${item.conteudo}</div>
-            ${item.anexo ? `<div class="feed-attachment">📎 ${item.anexo}</div>` : ''}
         `
         list.appendChild(div)
     })
@@ -826,9 +860,18 @@ async function postarNoMural(event) {
 // ==================== UTILITÁRIOS ====================
 function updateCounts(lista) {
     const base = lista || apuracoes
-    document.getElementById('count-andamento').textContent = base.filter(a => a.classificacao === 'andamento').length
-    document.getElementById('count-quente').textContent    = base.filter(a => a.classificacao === 'quente').length
-    document.getElementById('count-concluida').textContent = base.filter(a => a.classificacao === 'concluida').length
+    const na = base.filter(a => a.classificacao === 'andamento').length
+    const nq = base.filter(a => a.classificacao === 'quente').length
+    const nc = base.filter(a => a.classificacao === 'concluida').length
+    document.getElementById('count-andamento').textContent = na
+    document.getElementById('count-quente').textContent    = nq
+    document.getElementById('count-concluida').textContent = nc
+    const sa = document.getElementById('sub-andamento')
+    const sq = document.getElementById('sub-quente')
+    const sc = document.getElementById('sub-concluida')
+    if (sa) sa.textContent = na === 1 ? '1 apuração' : `${na} apurações`
+    if (sq) sq.textContent = nq === 1 ? '1 apuração' : `${nq} apurações`
+    if (sc) sc.textContent = nc === 1 ? '1 apuração' : `${nc} apurações`
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('active') }
@@ -842,7 +885,12 @@ function formatDate(ds) {
     return d.toLocaleDateString('pt-BR')
 }
 
-window.onclick = e => { if (e.target.classList.contains('modal')) e.target.classList.remove('active') }
+window.onclick = e => {
+    if (e.target.classList.contains('modal')) e.target.classList.remove('active')
+    if (!e.target.closest('.card-more-menu') && !e.target.classList.contains('btn-more')) {
+        document.querySelectorAll('.card-more-menu.open').forEach(m => m.classList.remove('open'))
+    }
+}
 
 document.addEventListener('input', e => {
     if (e.target.id === 'search-rondas'  || e.target.id === 'filter-status') renderRondas()
