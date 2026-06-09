@@ -20,15 +20,30 @@ const POR_PAGINA     = 20
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
-    const { data: { session } } = await db.auth.getSession()
-    if (session) { currentUser = session.user; await iniciarApp() }
-    else mostrarTela('tela-login')
+    // Verifica LGPD antes de qualquer coisa
+    const lgpdAceito = localStorage.getItem('lgpd_aceito')
+    if (!lgpdAceito) {
+        mostrarTela('tela-lgpd')
+    } else {
+        const { data: { session } } = await db.auth.getSession()
+        if (session) { currentUser = session.user; await iniciarApp() }
+        else mostrarTela('tela-login')
+    }
 
     db.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN')  { currentUser = session.user; await iniciarApp() }
         if (event === 'SIGNED_OUT') { currentUser = null; mostrarTela('tela-login') }
     })
 })
+
+function aceitarLGPD() {
+    localStorage.setItem('lgpd_aceito', new Date().toISOString())
+    // Verifica sessão após aceitar
+    db.auth.getSession().then(({ data: { session } }) => {
+        if (session) { currentUser = session.user; iniciarApp() }
+        else mostrarTela('tela-login')
+    })
+}
 
 async function iniciarApp() {
     const salvo = JSON.parse(localStorage.getItem(`userData_${currentUser.id}`)) || {}
