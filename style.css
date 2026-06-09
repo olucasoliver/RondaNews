@@ -761,3 +761,26 @@ body {
     background: #e53e3e;
     color: white;
 }
+
+/* ===== CONTADOR DE TEMPO PARADO ===== */
+.card-tempo-parado {
+    font-size: 11px;
+    color: #718096;
+    margin-top: 6px;
+    padding: 4px 8px;
+    background: #f7fafc;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.card-alerta {
+    font-size: 11px;
+    color: #c05621;
+    margin-top: 6px;
+    padding: 4px 8px;
+    background: #fffaf0;
+    border: 1px solid #fbd38d;
+    border-radius: 4px;
+    display: inline-block;
+    font-weight: 600;
+}
