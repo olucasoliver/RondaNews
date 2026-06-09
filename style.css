@@ -740,3 +740,24 @@ body {
         margin-left: 0;
     }
 }
+
+/* ===== BOTÕES DE CARD: EDITAR E DELETAR ===== */
+.btn-editar {
+    color: #3182ce;
+    border-color: #3182ce;
+}
+.btn-deletar {
+    color: #e53e3e;
+    border-color: #e53e3e;
+    background: transparent;
+    border: 1px solid currentColor;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.btn-deletar:hover {
+    background: #e53e3e;
+    color: white;
+}
