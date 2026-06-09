@@ -233,7 +233,10 @@
                 <div id="page-dashboard" class="page active">
                     <header class="header">
                         <h1>Dashboard de Apuração</h1>
-                        <button class="btn-primary" onclick="openModalApuracao()">+ Novo Registro</button>
+                        <div style="display:flex;gap:10px;align-items:center;">
+                            <select id="filter-autor" class="filter-select" style="font-size:13px;"><option value="">Todos os autores</option></select>
+                            <button class="btn-primary" onclick="openModalApuracao()">+ Novo Registro</button>
+                        </div>
                     </header>
                     <div class="dashboard-grid">
                         <div class="kanban-board">
