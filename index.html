@@ -102,6 +102,56 @@
 </head>
 <body>
 
+    <!-- ===== TELA LGPD ===== -->
+    <div id="tela-lgpd" class="tela">
+        <div class="auth-box" style="max-width:480px;">
+            <div class="logo">
+                <div class="auth-brand">Ronda News</div>
+                <div class="auth-brand-sub">Sistema de apuração</div>
+            </div>
+            <h2>Aviso de Privacidade</h2>
+            <p class="subtitulo">Antes de continuar, leia como tratamos seus dados.</p>
+
+            <div class="lgpd-content">
+                <div class="lgpd-item">
+                    <div class="lgpd-icon">🔐</div>
+                    <div>
+                        <strong>Dados de acesso</strong>
+                        <p>Seu e-mail e senha são usados exclusivamente para autenticação neste sistema. Não compartilhamos com terceiros.</p>
+                    </div>
+                </div>
+                <div class="lgpd-item">
+                    <div class="lgpd-icon">📋</div>
+                    <div>
+                        <strong>Dados editoriais</strong>
+                        <p>Apurações, contatos e registros são armazenados para uso interno da redação, com finalidade jornalística, conforme previsto no Art. 4º, II da LGPD.</p>
+                    </div>
+                </div>
+                <div class="lgpd-item">
+                    <div class="lgpd-icon">👥</div>
+                    <div>
+                        <strong>Contatos cadastrados</strong>
+                        <p>Fontes e contatos inseridos no sistema são de responsabilidade da equipe editorial. Devem ser mantidos apenas dados necessários à atividade jornalística.</p>
+                    </div>
+                </div>
+                <div class="lgpd-item">
+                    <div class="lgpd-icon">🗑️</div>
+                    <div>
+                        <strong>Seus direitos</strong>
+                        <p>Você pode solicitar a exclusão da sua conta e dados a qualquer momento pelo perfil do sistema.</p>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-primary btn-full" style="margin-top:24px;" onclick="aceitarLGPD()">
+                Entendi e aceito continuar
+            </button>
+            <p style="font-size:11px;color:var(--text-3);text-align:center;margin-top:12px;">
+                Lei nº 13.709/2018 — Lei Geral de Proteção de Dados
+            </p>
+        </div>
+    </div>
+
     <!-- ===== TELA DE LOGIN ===== -->
     <div id="tela-login" class="tela active">
         <div class="auth-box">
@@ -156,7 +206,10 @@
                 </div>
                 <div class="auth-erro" id="cadastro-erro"></div>
                 <div class="auth-ok"   id="cadastro-ok"></div>
-                <button type="submit" id="btn-cadastro" class="btn-primary btn-full" style="margin-top:16px;">Criar conta</button>
+                <p style="font-size:11px;color:var(--text-3);margin-top:12px;line-height:1.5;">
+                    Ao criar sua conta, você confirma que leu o aviso de privacidade e concorda com o uso dos seus dados para acesso a este sistema editorial.
+                </p>
+                <button type="submit" id="btn-cadastro" class="btn-primary btn-full" style="margin-top:12px;">Criar conta</button>
             </form>
 
             <div class="auth-link">
