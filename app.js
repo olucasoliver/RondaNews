@@ -6,33 +6,27 @@ const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 // ==================== ESTADO ====================
-let currentUser    = null
-let userData       = {}
-let apuracoes      = []
-let rondas         = []
-let fontes         = []
-let feedItems      = []
-let editandoId      = null   // id da apuração sendo editada no modal
-let editandoFonteId = null   // id da fonte sendo editada no modal
+let currentUser     = null
+let userData        = {}
+let apuracoes       = []
+let rondas          = []
+let fontes          = []
+let feedItems       = []
+let editandoId      = null
+let editandoFonteId = null
+let paginaAtual     = 0
+const POR_PAGINA    = 20
+let filtroAutor     = ''
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await db.auth.getSession()
-    if (session) {
-        currentUser = session.user
-        await iniciarApp()
-    } else {
-        mostrarTela('tela-login')
-    }
+    if (session) { currentUser = session.user; await iniciarApp() }
+    else mostrarTela('tela-login')
 
     db.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN') {
-            currentUser = session.user
-            await iniciarApp()
-        } else if (event === 'SIGNED_OUT') {
-            currentUser = null
-            mostrarTela('tela-login')
-        }
+        if (event === 'SIGNED_IN')  { currentUser = session.user; await iniciarApp() }
+        if (event === 'SIGNED_OUT') { currentUser = null; mostrarTela('tela-login') }
     })
 })
 
@@ -46,7 +40,6 @@ async function iniciarApp() {
         redacao:      salvo.redacao      || '',
         notificacoes: salvo.notificacoes !== undefined ? salvo.notificacoes : true
     }
-
     mostrarTela('tela-app')
     carregarPerfil()
     setupNavegacao()
@@ -67,17 +60,9 @@ async function fazerLogin(event) {
     const senha = document.getElementById('login-senha').value
     const btn   = document.getElementById('btn-login')
     const erro  = document.getElementById('login-erro')
-
-    btn.textContent  = 'Entrando...'
-    btn.disabled     = true
-    erro.textContent = ''
-
+    btn.textContent = 'Entrando...'; btn.disabled = true; erro.textContent = ''
     const { error } = await db.auth.signInWithPassword({ email, password: senha })
-    if (error) {
-        erro.textContent = traduzirErroAuth(error.message)
-        btn.textContent  = 'Entrar'
-        btn.disabled     = false
-    }
+    if (error) { erro.textContent = traduzirErroAuth(error.message); btn.textContent = 'Entrar'; btn.disabled = false }
 }
 
 async function fazerCadastro(event) {
@@ -88,31 +73,11 @@ async function fazerCadastro(event) {
     const btn   = document.getElementById('btn-cadastro')
     const erro  = document.getElementById('cadastro-erro')
     const ok    = document.getElementById('cadastro-ok')
-
-    btn.textContent  = 'Criando conta...'
-    btn.disabled     = true
-    erro.textContent = ''
-    ok.textContent   = ''
-
-    const { data, error } = await db.auth.signUp({
-        email, password: senha,
-        options: { data: { nome } }
-    })
-
-    if (error) {
-        erro.textContent = traduzirErroAuth(error.message)
-        btn.textContent  = 'Criar conta'
-        btn.disabled     = false
-        return
-    }
-
-    if (data.user) {
-        localStorage.setItem(`userData_${data.user.id}`, JSON.stringify({ nome, cargo: 'Repórter', redacao: '' }))
-    }
-
-    ok.textContent  = '✅ Conta criada! Já pode entrar.'
-    btn.textContent = 'Criar conta'
-    btn.disabled    = false
+    btn.textContent = 'Criando conta...'; btn.disabled = true; erro.textContent = ''; ok.textContent = ''
+    const { data, error } = await db.auth.signUp({ email, password: senha, options: { data: { nome } } })
+    if (error) { erro.textContent = traduzirErroAuth(error.message); btn.textContent = 'Criar conta'; btn.disabled = false; return }
+    if (data.user) localStorage.setItem(`userData_${data.user.id}`, JSON.stringify({ nome, cargo: 'Repórter', redacao: '' }))
+    ok.textContent = '✅ Conta criada! Já pode entrar.'; btn.textContent = 'Criar conta'; btn.disabled = false
 }
 
 async function fazerLogout() { await db.auth.signOut() }
@@ -128,49 +93,34 @@ function traduzirErroAuth(msg) {
 function alternarParaCadastro() { mostrarTela('tela-cadastro') }
 function alternarParaLogin()    { mostrarTela('tela-login') }
 
-// ==================== REALTIME (kanban + feed) ====================
+// ==================== REALTIME ====================
 function setupRealtime() {
-    // Feed: novos itens
     db.channel('feed-realtime')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_items' }, (payload) => {
-            if (!feedItems.find(f => f.id === payload.new.id)) {
-                feedItems.unshift(payload.new)
-                renderFeed()
-            }
-        })
-        .subscribe()
+            if (!feedItems.find(f => f.id === payload.new.id)) { feedItems.unshift(payload.new); renderFeed() }
+        }).subscribe()
 
-    // Kanban: INSERT de outro usuário
     db.channel('apuracoes-insert')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'apuracoes' }, (payload) => {
             if (!apuracoes.find(a => a.id === payload.new.id)) {
                 apuracoes.unshift(payload.new)
-                renderApuracoes()
-                renderRegistros()
+                atualizarFiltroAutores()
+                renderApuracoes(); renderRegistros()
             }
-        })
-        .subscribe()
+        }).subscribe()
 
-    // Kanban: UPDATE (mover card)
     db.channel('apuracoes-update')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'apuracoes' }, (payload) => {
             const idx = apuracoes.findIndex(a => a.id === payload.new.id)
-            if (idx !== -1) {
-                apuracoes[idx] = payload.new
-                renderApuracoes()
-                renderRegistros()
-            }
-        })
-        .subscribe()
+            if (idx !== -1) { apuracoes[idx] = payload.new; renderApuracoes(); renderRegistros() }
+        }).subscribe()
 
-    // Kanban: DELETE
     db.channel('apuracoes-delete')
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'apuracoes' }, (payload) => {
             apuracoes = apuracoes.filter(a => a.id !== payload.old.id)
-            renderApuracoes()
-            renderRegistros()
-        })
-        .subscribe()
+            atualizarFiltroAutores()
+            renderApuracoes(); renderRegistros()
+        }).subscribe()
 }
 
 // ==================== NAVEGAÇÃO ====================
@@ -232,6 +182,7 @@ async function carregarTudo() {
     await Promise.all([carregarApuracoes(), carregarRondas(), carregarFontes(), carregarFeed()])
     updateCounts()
     renderRegistros()
+    atualizarFiltroAutores()
 }
 
 // ==================== APURAÇÕES ====================
@@ -242,27 +193,83 @@ async function carregarApuracoes() {
     renderApuracoes()
 }
 
+// ---- Filtro por autor ----
+function atualizarFiltroAutores() {
+    const select = document.getElementById('filter-autor')
+    if (!select) return
+    const autores   = [...new Set(apuracoes.map(a => a.autor))].sort()
+    const atual     = select.value
+    select.innerHTML = '<option value="">Todos os autores</option>'
+    autores.forEach(a => {
+        const opt = document.createElement('option')
+        opt.value = a; opt.textContent = a
+        if (a === atual) opt.selected = true
+        select.appendChild(opt)
+    })
+}
+
 function renderApuracoes() {
+    const autorFiltro = document.getElementById('filter-autor')?.value || ''
     const columns = {
         andamento: document.getElementById('column-andamento'),
         quente:    document.getElementById('column-quente'),
         concluida: document.getElementById('column-concluida')
     }
     Object.values(columns).forEach(col => col.innerHTML = '')
-    apuracoes.forEach(ap => {
+
+    // Filtra por autor se selecionado
+    const visiveis = autorFiltro
+        ? apuracoes.filter(a => a.autor === autorFiltro)
+        : apuracoes
+
+    // Paginação: mostra só os da página atual (acumulativo — "carregar mais")
+    const fatia = visiveis.slice(0, (paginaAtual + 1) * POR_PAGINA)
+
+    fatia.forEach(ap => {
         const col = columns[ap.classificacao]
         if (col) col.appendChild(createCard(ap))
     })
-    updateCounts()
+
+    // Botão "Carregar mais" se houver mais cards
+    if (visiveis.length > fatia.length) {
+        const col = document.getElementById('column-andamento')
+        if (col) {
+            const btn = document.createElement('button')
+            btn.className   = 'btn-secondary'
+            btn.textContent = `Carregar mais (${visiveis.length - fatia.length} restantes)`
+            btn.style.cssText = 'width:100%;margin-top:12px;font-size:12px;'
+            btn.onclick = () => { paginaAtual++; renderApuracoes() }
+            // Coloca no final do kanban inteiro, não numa coluna
+            const kanban = document.querySelector('.kanban-board')
+            const existing = kanban?.querySelector('.btn-carregar-mais')
+            if (existing) existing.remove()
+            btn.classList.add('btn-carregar-mais')
+            kanban?.appendChild(btn)
+        }
+    } else {
+        document.querySelector('.btn-carregar-mais')?.remove()
+    }
+
+    updateCounts(visiveis)
 }
 
 function createCard(ap) {
     const div = document.createElement('div')
     div.className = `card ${ap.classificacao}`
+
+    // Contador de tempo parado (apenas para "andamento" e "quente")
+    const tempoParado = ap.classificacao !== 'concluida' ? getTempoParado(ap.created_at) : null
+    const alertaParado = tempoParado && tempoParado.horas >= 4
+        ? `<div class="card-alerta">⚠️ Parado há ${tempoParado.texto}</div>`
+        : tempoParado
+            ? `<div class="card-tempo-parado">🕐 ${tempoParado.texto} sem movimentação</div>`
+            : ''
+
     div.innerHTML = `
         <div class="card-title">${ap.titulo}</div>
         <div class="card-source">Fonte: ${ap.fonte}</div>
         <div class="card-description">${ap.descricao}</div>
+        ${alertaParado}
         <div class="card-meta">
             <span>${formatDate(ap.created_at)}</span>
             <span>${ap.autor}</span>
@@ -276,46 +283,42 @@ function createCard(ap) {
     return div
 }
 
+// ---- Tempo parado ----
+function getTempoParado(created_at) {
+    const diff  = Date.now() - new Date(created_at)
+    const horas = Math.floor(diff / 3600000)
+    const dias  = Math.floor(horas / 24)
+    if (horas < 1) return null
+    const texto = dias >= 1 ? `${dias}d` : `${horas}h`
+    return { horas, texto }
+}
+
 function getActionButtons(ap) {
     if (ap.classificacao === 'andamento') return `
         <button class="btn-small" onclick="moveCard(${ap.id}, 'quente')">Marcar Factual</button>
-        <button class="btn-small" onclick="moveCard(${ap.id}, 'concluida')">Concluir</button>`
+        <button class="btn-small" onclick="confirmarConcluir(${ap.id})">Concluir</button>`
     if (ap.classificacao === 'quente') return `
         <button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">Voltar</button>
-        <button class="btn-small" onclick="moveCard(${ap.id}, 'concluida')">Concluir</button>`
+        <button class="btn-small" onclick="confirmarConcluir(${ap.id})">Concluir</button>`
     return `<button class="btn-small" onclick="moveCard(${ap.id}, 'andamento')">↻ Reabrir</button>`
+}
+
+// ---- Confirmação antes de concluir ----
+function confirmarConcluir(id) {
+    const ap = apuracoes.find(a => a.id === id)
+    if (!ap) return
+    if (confirm(`Marcar "${ap.titulo}" como Concluída?`)) moveCard(id, 'concluida')
 }
 
 async function moveCard(id, novaClassificacao) {
     const labels   = { andamento: 'Em Andamento', quente: 'Factual', concluida: 'Concluída' }
     const apuracao = apuracoes.find(a => a.id === id)
     if (!apuracao) return
-
     const { error } = await db.from('apuracoes').update({ classificacao: novaClassificacao }).eq('id', id)
     if (error) { alert('Erro: ' + error.message); return }
-
-    // Realtime cuida do update visual, mas atualizamos cache local também
     apuracao.classificacao = novaClassificacao
     renderApuracoes()
     await addToFeed(userData.nome, `Moveu "${apuracao.titulo}" para ${labels[novaClassificacao]}`)
-}
-
-// ---- Editar ----
-function abrirEdicao(id) {
-    const ap = apuracoes.find(a => a.id === id)
-    if (!ap) return
-
-    editandoId = id
-    document.getElementById('apuracao-titulo').value         = ap.titulo
-    document.getElementById('apuracao-fonte').value          = ap.fonte
-    document.getElementById('apuracao-descricao').value      = ap.descricao
-    document.getElementById('apuracao-classificacao').value  = ap.classificacao
-    document.getElementById('apuracao-link').value           = ap.link || ''
-
-    // Muda o header e botão do modal
-    document.getElementById('modal-apuracao-titulo').textContent = 'Editar Apuração'
-    document.getElementById('btn-salvar-apuracao').textContent   = 'Salvar Alterações'
-    document.getElementById('modal-apuracao').classList.add('active')
 }
 
 function openModalApuracao() {
@@ -326,9 +329,22 @@ function openModalApuracao() {
     document.getElementById('modal-apuracao').classList.add('active')
 }
 
+function abrirEdicao(id) {
+    const ap = apuracoes.find(a => a.id === id)
+    if (!ap) return
+    editandoId = id
+    document.getElementById('apuracao-titulo').value        = ap.titulo
+    document.getElementById('apuracao-fonte').value         = ap.fonte
+    document.getElementById('apuracao-descricao').value     = ap.descricao
+    document.getElementById('apuracao-classificacao').value = ap.classificacao
+    document.getElementById('apuracao-link').value          = ap.link || ''
+    document.getElementById('modal-apuracao-titulo').textContent = 'Editar Apuração'
+    document.getElementById('btn-salvar-apuracao').textContent   = 'Salvar Alterações'
+    document.getElementById('modal-apuracao').classList.add('active')
+}
+
 async function salvarApuracao(event) {
     event.preventDefault()
-
     const dados = {
         titulo:        document.getElementById('apuracao-titulo').value,
         fonte:         document.getElementById('apuracao-fonte').value,
@@ -336,40 +352,33 @@ async function salvarApuracao(event) {
         classificacao: document.getElementById('apuracao-classificacao').value,
         link:          document.getElementById('apuracao-link').value || null
     }
-
     if (editandoId) {
-        // EDITAR
         const { data, error } = await db.from('apuracoes').update(dados).eq('id', editandoId).select().single()
         if (error) { alert('Erro ao editar: ' + error.message); return }
         const idx = apuracoes.findIndex(a => a.id === editandoId)
         if (idx !== -1) apuracoes[idx] = data
         await addToFeed(userData.nome, `Editou a apuração: "${data.titulo}"`)
     } else {
-        // NOVO
         dados.autor = userData.nome
         const { data, error } = await db.from('apuracoes').insert([dados]).select().single()
         if (error) { alert('Erro ao salvar: ' + error.message); return }
         apuracoes.unshift(data)
+        atualizarFiltroAutores()
         await addToFeed(userData.nome, `Criou nova apuração: "${data.titulo}"`)
     }
-
-    renderApuracoes()
-    renderRegistros()
+    renderApuracoes(); renderRegistros()
     closeModal('modal-apuracao')
     event.target.reset()
     editandoId = null
 }
 
-// ---- Deletar ----
 async function deletarApuracao(id, titulo) {
     if (!confirm(`Deletar "${titulo}"? Esta ação não pode ser desfeita.`)) return
-
     const { error } = await db.from('apuracoes').delete().eq('id', id)
     if (error) { alert('Erro ao deletar: ' + error.message); return }
-
     apuracoes = apuracoes.filter(a => a.id !== id)
-    renderApuracoes()
-    renderRegistros()
+    atualizarFiltroAutores()
+    renderApuracoes(); renderRegistros()
     await addToFeed(userData.nome, `Removeu a apuração: "${titulo}"`)
 }
 
@@ -377,8 +386,7 @@ async function deletarApuracao(id, titulo) {
 async function carregarRondas() {
     const { data, error } = await db.from('rondas').select('*').order('created_at', { ascending: false })
     if (error) { console.error(error); return }
-    rondas = data
-    renderRondas()
+    rondas = data; renderRondas()
 }
 
 function renderRondas() {
@@ -387,9 +395,7 @@ function renderRondas() {
     list.innerHTML = ''
     const search = document.getElementById('search-rondas')?.value.toLowerCase() || ''
     const filtro = document.getElementById('filter-status')?.value || ''
-    const filtradas = rondas.filter(r =>
-        r.nome.toLowerCase().includes(search) && (!filtro || r.status === filtro)
-    )
+    const filtradas = rondas.filter(r => r.nome.toLowerCase().includes(search) && (!filtro || r.status === filtro))
     if (!filtradas.length) { list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhuma ronda encontrada.</p>'; return }
     filtradas.forEach(ronda => {
         const div = document.createElement('div')
@@ -421,10 +427,8 @@ async function salvarRonda(event) {
     }
     const { data, error } = await db.from('rondas').insert([nova]).select().single()
     if (error) { alert('Erro: ' + error.message); return }
-    rondas.unshift(data)
-    renderRondas()
-    closeModal('modal-ronda')
-    event.target.reset()
+    rondas.unshift(data); renderRondas()
+    closeModal('modal-ronda'); event.target.reset()
     await addToFeed(userData.nome, `Criou nova ronda: "${data.nome}"`)
 }
 
@@ -432,8 +436,7 @@ async function salvarRonda(event) {
 async function carregarFontes() {
     const { data, error } = await db.from('fontes').select('*').order('created_at', { ascending: false })
     if (error) { console.error(error); return }
-    fontes = data
-    renderFontes()
+    fontes = data; renderFontes()
 }
 
 function renderFontes() {
@@ -442,9 +445,7 @@ function renderFontes() {
     list.innerHTML = ''
     const search = document.getElementById('search-fontes')?.value.toLowerCase() || ''
     const filtro = document.getElementById('filter-tipo')?.value || ''
-    const filtradas = fontes.filter(f =>
-        f.nome.toLowerCase().includes(search) && (!filtro || f.tipo === filtro)
-    )
+    const filtradas = fontes.filter(f => f.nome.toLowerCase().includes(search) && (!filtro || f.tipo === filtro))
     if (!filtradas.length) { list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhum contato encontrado.</p>'; return }
     filtradas.forEach(fonte => {
         const div = document.createElement('div')
@@ -482,16 +483,15 @@ function toggleCampoDocumento() {
 function openModalFonte() {
     editandoFonteId = null
     document.getElementById('form-fonte').reset()
-    document.getElementById('campo-documento').style.display = 'none'
-    document.getElementById('modal-fonte-titulo').textContent = 'Novo Contato/Fonte'
-    document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Contato'
+    document.getElementById('campo-documento').style.display   = 'none'
+    document.getElementById('modal-fonte-titulo').textContent  = 'Novo Contato/Fonte'
+    document.getElementById('btn-salvar-fonte').textContent    = 'Salvar Contato'
     document.getElementById('modal-fonte').classList.add('active')
 }
 
 function abrirEdicaoFonte(id) {
     const fonte = fontes.find(f => f.id === id)
     if (!fonte) return
-
     editandoFonteId = id
     document.getElementById('fonte-nome').value      = fonte.nome
     document.getElementById('fonte-tipo').value      = fonte.tipo
@@ -499,8 +499,7 @@ function abrirEdicaoFonte(id) {
     document.getElementById('fonte-confianca').value = fonte.confianca
     document.getElementById('fonte-link').value      = fonte.link || ''
     document.getElementById('fonte-obs').value       = fonte.obs || ''
-
-    document.getElementById('campo-documento').style.display = fonte.tipo === 'documento' ? 'block' : 'none'
+    document.getElementById('campo-documento').style.display  = fonte.tipo === 'documento' ? 'block' : 'none'
     document.getElementById('modal-fonte-titulo').textContent = 'Editar Contato/Fonte'
     document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Alterações'
     document.getElementById('modal-fonte').classList.add('active')
@@ -516,7 +515,6 @@ async function salvarFonte(event) {
         link:      document.getElementById('fonte-link').value || null,
         obs:       document.getElementById('fonte-obs').value
     }
-
     if (editandoFonteId) {
         const { data, error } = await db.from('fontes').update(dados).eq('id', editandoFonteId).select().single()
         if (error) { alert('Erro ao editar: ' + error.message); return }
@@ -529,19 +527,14 @@ async function salvarFonte(event) {
         fontes.unshift(data)
         await addToFeed(userData.nome, `Adicionou nova fonte: "${data.nome}"`)
     }
-
-    renderFontes()
-    closeModal('modal-fonte')
-    event.target.reset()
-    editandoFonteId = null
+    renderFontes(); closeModal('modal-fonte'); event.target.reset(); editandoFonteId = null
 }
 
 async function deletarFonte(id, nome) {
     if (!confirm(`Deletar "${nome}"? Esta ação não pode ser desfeita.`)) return
     const { error } = await db.from('fontes').delete().eq('id', id)
     if (error) { alert('Erro ao deletar: ' + error.message); return }
-    fontes = fontes.filter(f => f.id !== id)
-    renderFontes()
+    fontes = fontes.filter(f => f.id !== id); renderFontes()
     await addToFeed(userData.nome, `Removeu o contato: "${nome}"`)
 }
 
@@ -577,8 +570,7 @@ function exportarRegistros() {
 async function carregarFeed() {
     const { data, error } = await db.from('feed_items').select('*').order('created_at', { ascending: false }).limit(30)
     if (error) { console.error(error); return }
-    feedItems = data
-    renderFeed()
+    feedItems = data; renderFeed()
 }
 
 function renderFeed() {
@@ -605,22 +597,21 @@ async function addToFeed(autor, conteudo, anexo = null) {
     if (error) console.error(error)
 }
 
-// ---- Post manual no mural ----
 async function postarNoMural(event) {
     event.preventDefault()
     const input = document.getElementById('mural-input')
     const texto = input.value.trim()
     if (!texto) return
-
     await addToFeed(userData.nome, texto)
     input.value = ''
 }
 
 // ==================== UTILITÁRIOS ====================
-function updateCounts() {
-    document.getElementById('count-andamento').textContent = apuracoes.filter(a => a.classificacao === 'andamento').length
-    document.getElementById('count-quente').textContent    = apuracoes.filter(a => a.classificacao === 'quente').length
-    document.getElementById('count-concluida').textContent = apuracoes.filter(a => a.classificacao === 'concluida').length
+function updateCounts(lista) {
+    const base = lista || apuracoes
+    document.getElementById('count-andamento').textContent = base.filter(a => a.classificacao === 'andamento').length
+    document.getElementById('count-quente').textContent    = base.filter(a => a.classificacao === 'quente').length
+    document.getElementById('count-concluida').textContent = base.filter(a => a.classificacao === 'concluida').length
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('active') }
@@ -639,4 +630,5 @@ window.onclick = e => { if (e.target.classList.contains('modal')) e.target.class
 document.addEventListener('input', e => {
     if (e.target.id === 'search-rondas' || e.target.id === 'filter-status') renderRondas()
     if (e.target.id === 'search-fontes' || e.target.id === 'filter-tipo')   renderFontes()
+    if (e.target.id === 'filter-autor') { paginaAtual = 0; renderApuracoes() }
 })
