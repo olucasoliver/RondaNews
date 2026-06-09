@@ -173,22 +173,23 @@
                             
                             <div class="form-group">
                                 <label>Nome Completo *</label>
-                                <input type="text" id="perfil-nome" required>
+                                <input type="text" id="perfil-nome" required placeholder="Seu nome">
                             </div>
                             
-                            <div class="form-group">
-                                <label>Email *</label>
-                                <input type="email" id="perfil-email" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>Cargo/Função</label>
-                                <input type="text" id="perfil-cargo" placeholder="Ex: Repórter, Editor, etc.">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" id="perfil-email" placeholder="seu@email.com">
+                                </div>
+                                <div class="form-group">
+                                    <label>Cargo</label>
+                                    <input type="text" id="perfil-cargo" placeholder="Ex: Repórter">
+                                </div>
                             </div>
                             
                             <div class="form-group">
                                 <label>Telefone</label>
-                                <input type="tel" id="perfil-telefone" placeholder="(00) 00000-0000">
+                                <input type="tel" id="perfil-telefone" placeholder="(67) 99999-9999">
                             </div>
                         </div>
                         
@@ -242,7 +243,7 @@
                         <label>Classificação</label>
                         <select id="apuracao-classificacao">
                             <option value="andamento">Em Andamento</option>
-                            <option value="factual">Factual</option>
+                            <option value="quente">Factual</option>
                             <option value="concluida">✅ Concluída</option>
                         </select>
                     </div>
@@ -361,6 +362,8 @@
         </div>
     </div>
 
+    <!-- SDK do Supabase via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
 </body>
 </html>
