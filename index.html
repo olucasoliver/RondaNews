@@ -453,42 +453,33 @@
     <div id="modal-fonte" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-fonte-titulo">Novo Contato/Fonte</h2>
+                <h2 id="modal-fonte-titulo">Novo Contato</h2>
                 <button class="close-btn" onclick="closeModal('modal-fonte')">&times;</button>
             </div>
             <form id="form-fonte" onsubmit="salvarFonte(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome *</label>
+                        <input type="text" id="fonte-nome" required placeholder="Nome da pessoa ou órgão">
+                    </div>
+                    <div class="form-group">
+                        <label>Função/Cargo *</label>
+                        <input type="text" id="fonte-funcao" required placeholder="Ex: Secretário de Saúde">
+                    </div>
+                </div>
                 <div class="form-group">
-                    <label>Nome *</label>
-                    <input type="text" id="fonte-nome" required placeholder="Nome da pessoa, órgão ou site">
+                    <label>Cidade</label>
+                    <input type="text" id="fonte-cidade" placeholder="Ex: Campo Grande">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Tipo *</label>
-                        <select id="fonte-tipo" required onchange="toggleCampoDocumento()">
-                            <option value="">Selecione...</option>
-                            <option value="pessoa">Pessoa</option>
-                            <option value="orgao">Órgão Público</option>
-                            <option value="site">Site/Portal</option>
-                            <option value="rede-social">Rede Social</option>
-                            <option value="documento">Documento</option>
-                        </select>
+                        <label>Telefone</label>
+                        <input type="tel" id="fonte-telefone" placeholder="(67) 99999-9999">
                     </div>
                     <div class="form-group">
-                        <label>Nível de Confiança</label>
-                        <select id="fonte-confianca">
-                            <option value="alta">Alta</option>
-                            <option value="media">Média</option>
-                            <option value="baixa">Baixa</option>
-                        </select>
+                        <label>E-mail</label>
+                        <input type="email" id="fonte-email" placeholder="contato@exemplo.com">
                     </div>
-                </div>
-                <div class="form-group">
-                    <label>Contato/URL</label>
-                    <input type="text" id="fonte-contato" placeholder="Telefone, email ou link">
-                </div>
-                <div class="form-group" id="campo-documento" style="display:none;">
-                    <label>Link do Documento</label>
-                    <input type="url" id="fonte-link" placeholder="https://...">
                 </div>
                 <div class="form-group">
                     <label>Observações</label>
@@ -499,7 +490,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
 </body>
 </html>
