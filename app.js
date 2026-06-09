@@ -505,20 +505,24 @@ function renderFontes() {
     if (!list) return
     list.innerHTML = ''
     const search = document.getElementById('search-fontes')?.value.toLowerCase() || ''
-    const filtro = document.getElementById('filter-tipo')?.value || ''
-    const filtradas = fontes.filter(f => f.nome.toLowerCase().includes(search) && (!filtro || f.tipo === filtro))
-    if (!filtradas.length) { list.innerHTML = '<p style="color:#a0aec0;padding:16px;">Nenhum contato encontrado.</p>'; return }
+    const filtradas = fontes.filter(f =>
+        f.nome.toLowerCase().includes(search) ||
+        (f.funcao || '').toLowerCase().includes(search) ||
+        (f.cidade || '').toLowerCase().includes(search)
+    )
+    if (!filtradas.length) { list.innerHTML = '<p style="color:var(--text-3);padding:16px;">Nenhum contato encontrado.</p>'; return }
     filtradas.forEach(fonte => {
         const div = document.createElement('div')
         div.className = 'fonte-card'
         div.innerHTML = `
             <div class="fonte-header">
                 <div class="fonte-nome">${fonte.nome}</div>
-                <span class="fonte-tipo">${getTipoLabel(fonte.tipo)}</span>
+                ${fonte.cidade ? `<span class="fonte-cidade">${fonte.cidade}</span>` : ''}
             </div>
-            <div class="fonte-contato">📞 ${fonte.contato || 'Não informado'}</div>
-            <div class="fonte-confianca"><strong>Confiança:</strong> <span class="confianca-${fonte.confianca}">${getConfiancaLabel(fonte.confianca)}</span></div>
-            ${fonte.obs ? `<div style="margin-top:8px;font-size:12px;color:#718096;">${fonte.obs}</div>` : ''}
+            ${fonte.funcao   ? `<div class="fonte-funcao">${fonte.funcao}</div>`     : ''}
+            ${fonte.telefone ? `<div class="fonte-contato">📞 ${fonte.telefone}</div>` : ''}
+            ${fonte.email    ? `<div class="fonte-contato">✉️ ${fonte.email}</div>`    : ''}
+            ${fonte.obs      ? `<div class="fonte-obs">${fonte.obs}</div>`             : ''}
             <div class="card-actions" style="margin-top:12px;">
                 <button class="btn-small btn-editar" onclick="abrirEdicaoFonte(${fonte.id})">✏️ Editar</button>
                 <button class="btn-small btn-deletar" onclick="deletarFonte(${fonte.id}, '${fonte.nome.replace(/'/g, "\\'")}')">🗑️</button>
@@ -528,24 +532,10 @@ function renderFontes() {
     })
 }
 
-function getTipoLabel(tipo) {
-    return { pessoa: 'Pessoa', orgao: 'Órgão', site: 'Site', 'rede-social': 'Rede Social', documento: 'Documento' }[tipo] || tipo
-}
-
-function getConfiancaLabel(c) {
-    return { alta: '🟢 Alta', media: '🟡 Média', baixa: '🔴 Baixa' }[c]
-}
-
-function toggleCampoDocumento() {
-    document.getElementById('campo-documento').style.display =
-        document.getElementById('fonte-tipo').value === 'documento' ? 'block' : 'none'
-}
-
 function openModalFonte() {
     editandoFonteId = null
     document.getElementById('form-fonte').reset()
-    document.getElementById('campo-documento').style.display  = 'none'
-    document.getElementById('modal-fonte-titulo').textContent = 'Novo Contato/Fonte'
+    document.getElementById('modal-fonte-titulo').textContent = 'Novo Contato'
     document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Contato'
     document.getElementById('modal-fonte').classList.add('active')
 }
@@ -554,14 +544,13 @@ function abrirEdicaoFonte(id) {
     const fonte = fontes.find(f => f.id === id)
     if (!fonte) return
     editandoFonteId = id
-    document.getElementById('fonte-nome').value      = fonte.nome
-    document.getElementById('fonte-tipo').value      = fonte.tipo
-    document.getElementById('fonte-contato').value   = fonte.contato || ''
-    document.getElementById('fonte-confianca').value = fonte.confianca
-    document.getElementById('fonte-link').value      = fonte.link || ''
-    document.getElementById('fonte-obs').value       = fonte.obs || ''
-    document.getElementById('campo-documento').style.display  = fonte.tipo === 'documento' ? 'block' : 'none'
-    document.getElementById('modal-fonte-titulo').textContent = 'Editar Contato/Fonte'
+    document.getElementById('fonte-nome').value     = fonte.nome
+    document.getElementById('fonte-funcao').value   = fonte.funcao   || ''
+    document.getElementById('fonte-cidade').value   = fonte.cidade   || ''
+    document.getElementById('fonte-telefone').value = fonte.telefone || ''
+    document.getElementById('fonte-email').value    = fonte.email    || ''
+    document.getElementById('fonte-obs').value      = fonte.obs      || ''
+    document.getElementById('modal-fonte-titulo').textContent = 'Editar Contato'
     document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Alterações'
     document.getElementById('modal-fonte').classList.add('active')
 }
@@ -569,12 +558,12 @@ function abrirEdicaoFonte(id) {
 async function salvarFonte(event) {
     event.preventDefault()
     const dados = {
-        nome:      document.getElementById('fonte-nome').value,
-        tipo:      document.getElementById('fonte-tipo').value,
-        contato:   document.getElementById('fonte-contato').value,
-        confianca: document.getElementById('fonte-confianca').value,
-        link:      document.getElementById('fonte-link').value || null,
-        obs:       document.getElementById('fonte-obs').value
+        nome:     document.getElementById('fonte-nome').value,
+        funcao:   document.getElementById('fonte-funcao').value,
+        cidade:   document.getElementById('fonte-cidade').value   || null,
+        telefone: document.getElementById('fonte-telefone').value || null,
+        email:    document.getElementById('fonte-email').value    || null,
+        obs:      document.getElementById('fonte-obs').value      || null
     }
     if (editandoFonteId) {
         const { data, error } = await db.from('fontes').update(dados).eq('id', editandoFonteId).select().single()
@@ -586,7 +575,7 @@ async function salvarFonte(event) {
         const { data, error } = await db.from('fontes').insert([dados]).select().single()
         if (error) { alert('Erro ao salvar: ' + error.message); return }
         fontes.unshift(data)
-        await addToFeed(userData.nome, `Adicionou nova fonte: "${data.nome}"`)
+        await addToFeed(userData.nome, `Adicionou novo contato: "${data.nome}"`)
     }
     renderFontes(); closeModal('modal-fonte'); event.target.reset(); editandoFonteId = null
 }
