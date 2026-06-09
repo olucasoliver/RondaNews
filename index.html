@@ -167,6 +167,7 @@
 
     <!-- ===== TELA PRINCIPAL DO APP ===== -->
     <div id="tela-app" class="tela">
+        <div class="sidebar-overlay" id="sidebar-overlay" onclick="fecharSidebar()"></div>
         <div class="container">
             <!-- Menu Lateral -->
             <aside class="sidebar">
@@ -213,6 +214,7 @@
                 <!-- PÁGINA: DASHBOARD -->
                 <div id="page-dashboard" class="page active">
                     <div class="page-topbar">
+                        <button class="btn-hamburger" onclick="abrirSidebar()" aria-label="Menu">☰</button>
                         <span class="page-topbar-title">Dashboard</span>
                         <div class="page-topbar-actions">
                             <input type="text" id="search-kanban" placeholder="Buscar..." class="search-input" style="max-width:180px;height:30px;font-size:12px;">
