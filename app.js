@@ -12,7 +12,8 @@ let apuracoes      = []
 let rondas         = []
 let fontes         = []
 let feedItems      = []
-let editandoId     = null   // id da apuração sendo editada no modal
+let editandoId      = null   // id da apuração sendo editada no modal
+let editandoFonteId = null   // id da fonte sendo editada no modal
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -456,6 +457,10 @@ function renderFontes() {
             <div class="fonte-contato">📞 ${fonte.contato || 'Não informado'}</div>
             <div class="fonte-confianca"><strong>Confiança:</strong> <span class="confianca-${fonte.confianca}">${getConfiancaLabel(fonte.confianca)}</span></div>
             ${fonte.obs ? `<div style="margin-top:8px;font-size:12px;color:#718096;">${fonte.obs}</div>` : ''}
+            <div class="card-actions" style="margin-top:12px;">
+                <button class="btn-small btn-editar" onclick="abrirEdicaoFonte(${fonte.id})">✏️ Editar</button>
+                <button class="btn-small btn-deletar" onclick="deletarFonte(${fonte.id}, '${fonte.nome.replace(/'/g, "\\'")}')">🗑️</button>
+            </div>
         `
         list.appendChild(div)
     })
@@ -474,11 +479,36 @@ function toggleCampoDocumento() {
         document.getElementById('fonte-tipo').value === 'documento' ? 'block' : 'none'
 }
 
-function openModalFonte() { document.getElementById('modal-fonte').classList.add('active') }
+function openModalFonte() {
+    editandoFonteId = null
+    document.getElementById('form-fonte').reset()
+    document.getElementById('campo-documento').style.display = 'none'
+    document.getElementById('modal-fonte-titulo').textContent = 'Novo Contato/Fonte'
+    document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Contato'
+    document.getElementById('modal-fonte').classList.add('active')
+}
+
+function abrirEdicaoFonte(id) {
+    const fonte = fontes.find(f => f.id === id)
+    if (!fonte) return
+
+    editandoFonteId = id
+    document.getElementById('fonte-nome').value      = fonte.nome
+    document.getElementById('fonte-tipo').value      = fonte.tipo
+    document.getElementById('fonte-contato').value   = fonte.contato || ''
+    document.getElementById('fonte-confianca').value = fonte.confianca
+    document.getElementById('fonte-link').value      = fonte.link || ''
+    document.getElementById('fonte-obs').value       = fonte.obs || ''
+
+    document.getElementById('campo-documento').style.display = fonte.tipo === 'documento' ? 'block' : 'none'
+    document.getElementById('modal-fonte-titulo').textContent = 'Editar Contato/Fonte'
+    document.getElementById('btn-salvar-fonte').textContent   = 'Salvar Alterações'
+    document.getElementById('modal-fonte').classList.add('active')
+}
 
 async function salvarFonte(event) {
     event.preventDefault()
-    const nova = {
+    const dados = {
         nome:      document.getElementById('fonte-nome').value,
         tipo:      document.getElementById('fonte-tipo').value,
         contato:   document.getElementById('fonte-contato').value,
@@ -486,13 +516,33 @@ async function salvarFonte(event) {
         link:      document.getElementById('fonte-link').value || null,
         obs:       document.getElementById('fonte-obs').value
     }
-    const { data, error } = await db.from('fontes').insert([nova]).select().single()
-    if (error) { alert('Erro: ' + error.message); return }
-    fontes.unshift(data)
+
+    if (editandoFonteId) {
+        const { data, error } = await db.from('fontes').update(dados).eq('id', editandoFonteId).select().single()
+        if (error) { alert('Erro ao editar: ' + error.message); return }
+        const idx = fontes.findIndex(f => f.id === editandoFonteId)
+        if (idx !== -1) fontes[idx] = data
+        await addToFeed(userData.nome, `Atualizou contato: "${data.nome}"`)
+    } else {
+        const { data, error } = await db.from('fontes').insert([dados]).select().single()
+        if (error) { alert('Erro ao salvar: ' + error.message); return }
+        fontes.unshift(data)
+        await addToFeed(userData.nome, `Adicionou nova fonte: "${data.nome}"`)
+    }
+
     renderFontes()
     closeModal('modal-fonte')
     event.target.reset()
-    await addToFeed(userData.nome, `Adicionou nova fonte: "${data.nome}"`)
+    editandoFonteId = null
+}
+
+async function deletarFonte(id, nome) {
+    if (!confirm(`Deletar "${nome}"? Esta ação não pode ser desfeita.`)) return
+    const { error } = await db.from('fontes').delete().eq('id', id)
+    if (error) { alert('Erro ao deletar: ' + error.message); return }
+    fontes = fontes.filter(f => f.id !== id)
+    renderFontes()
+    await addToFeed(userData.nome, `Removeu o contato: "${nome}"`)
 }
 
 // ==================== REGISTROS ====================
