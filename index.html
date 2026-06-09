@@ -261,6 +261,10 @@
                         </div>
                         <aside class="feed-sidebar">
                             <h2>Mural da Redação</h2>
+                            <form onsubmit="postarNoMural(event)" style="display:flex;gap:8px;margin-bottom:16px;">
+                                <input type="text" id="mural-input" placeholder="Postar no mural..." class="search-input" style="font-size:13px;">
+                                <button type="submit" class="btn-primary" style="padding:8px 14px;font-size:13px;white-space:nowrap;">Enviar</button>
+                            </form>
                             <div class="feed-list" id="feed-list"></div>
                         </aside>
                     </div>
@@ -377,10 +381,10 @@
     <div id="modal-apuracao" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Novo Registro de Apuração</h2>
+                <h2 id="modal-apuracao-titulo">Novo Registro de Apuração</h2>
                 <button class="close-btn" onclick="closeModal('modal-apuracao')">&times;</button>
             </div>
-            <form onsubmit="salvarApuracao(event)">
+            <form id="form-apuracao" onsubmit="salvarApuracao(event)">
                 <div class="form-group">
                     <label>Título da Apuração *</label>
                     <input type="text" id="apuracao-titulo" required placeholder="Ex: Checker Diário Oficial">
@@ -407,7 +411,7 @@
                     <label>Link/Referência</label>
                     <input type="url" id="apuracao-link" placeholder="https://...">
                 </div>
-                <button type="submit" class="btn-primary btn-full">Salvar Registro</button>
+                <button type="submit" id="btn-salvar-apuracao" class="btn-primary btn-full">Salvar Registro</button>
             </form>
         </div>
     </div>
