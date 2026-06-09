@@ -97,26 +97,7 @@
 
         .auth-link a:hover { text-decoration: underline; }
 
-        /* Botão logout na sidebar */
-        .btn-logout {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            width: 100%;
-            padding: 10px 16px;
-            background: none;
-            border: none;
-            border-radius: 8px;
-            color: #e53e3e;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 8px;
-            transition: background 0.2s;
-            text-align: left;
-        }
 
-        .btn-logout:hover { background: #fff5f5; }
     </style>
 </head>
 <body>
@@ -190,25 +171,27 @@
             <!-- Menu Lateral -->
             <aside class="sidebar">
                 <div class="logo">
-                    <div class="logo-icon">📋</div>
-                    <span>Ronda News</span>
+                    <div class="logo-wordmark">Ronda News</div>
+                    <div class="logo-sub">Sistema de apuração</div>
                 </div>
 
                 <nav class="menu">
+                    <div class="menu-section">Redação</div>
                     <a href="#" class="menu-item active" data-page="dashboard">
-                        <span class="icon">◉</span> Dashboard
+                        <span class="icon">▦</span> Dashboard
                     </a>
                     <a href="#" class="menu-item" data-page="rondas">
-                        <span class="icon">⟳</span> Rondas de Apuração
+                        <span class="icon">↻</span> Rondas
                     </a>
                     <a href="#" class="menu-item" data-page="fontes">
-                        <span class="icon">☰</span> Banco de Fontes
+                        <span class="icon">◎</span> Fontes e Contatos
                     </a>
                     <a href="#" class="menu-item" data-page="registros">
-                        <span class="icon">≡</span> Registros (Feed)
+                        <span class="icon">≡</span> Registros
                     </a>
+                    <div class="menu-section">Conta</div>
                     <a href="#" class="menu-item" data-page="perfil">
-                        <span class="icon">⚙</span> Perfil
+                        <span class="icon">○</span> Perfil
                     </a>
                 </nav>
 
@@ -220,9 +203,7 @@
                             <div class="user-role" id="user-role-display">...</div>
                         </div>
                     </div>
-                    <button class="btn-logout" onclick="fazerLogout()">
-                        ⇥ Sair
-                    </button>
+                    <button class="btn-logout" onclick="fazerLogout()">Sair</button>
                 </div>
             </aside>
 
@@ -231,45 +212,49 @@
 
                 <!-- PÁGINA: DASHBOARD -->
                 <div id="page-dashboard" class="page active">
-                    <header class="header">
-                        <h1>Dashboard de Apuração</h1>
-                        <div style="display:flex;gap:10px;align-items:center;">
-                            <input type="text" id="search-kanban" placeholder="Buscar no kanban..." class="search-input" style="font-size:13px;max-width:200px;">
-                            <select id="filter-autor" class="filter-select" style="font-size:13px;"><option value="">Todos os autores</option></select>
-                            <button class="btn-primary" onclick="openModalApuracao()">+ Novo Registro</button>
+                    <div class="page-topbar">
+                        <span class="page-topbar-title">Dashboard</span>
+                        <div class="page-topbar-actions">
+                            <input type="text" id="search-kanban" placeholder="Buscar..." class="search-input" style="max-width:180px;height:30px;font-size:12px;">
+                            <select id="filter-autor" class="filter-select" style="height:30px;font-size:12px;"><option value="">Todos os autores</option></select>
+                            <button class="btn-primary" onclick="openModalApuracao()" style="height:30px;font-size:12px;">+ Novo registro</button>
                         </div>
-                    </header>
-                    <div class="dashboard-grid">
-                        <div class="kanban-board">
-                            <div class="kanban-column">
-                                <div class="column-header em-andamento">
-                                    <h3>Em Andamento</h3>
-                                    <span class="count" id="count-andamento">0</span>
+                    </div>
+                    <div class="stats-strip">
+                        <div class="stat-item"><span class="stat-n" id="count-andamento">0</span><span class="stat-l">Em andamento</span></div>
+                        <div class="stat-item"><span class="stat-n" id="count-quente">0</span><span class="stat-l">Factual</span></div>
+                        <div class="stat-item"><span class="stat-n" id="count-concluida">0</span><span class="stat-l">Concluída</span></div>
+                    </div>
+                    <div class="dashboard-body">
+                        <div class="kanban-wrap">
+                            <div class="kanban-board">
+                                <div class="kanban-column">
+                                    <div class="column-header em-andamento">
+                                        <h3><span class="col-dot col-dot-blue"></span>Em andamento</h3>
+                                    </div>
+                                    <div class="column-content" id="column-andamento"></div>
                                 </div>
-                                <div class="column-content" id="column-andamento"></div>
-                            </div>
-                            <div class="kanban-column">
-                                <div class="column-header factual">
-                                    <h3>Factual</h3>
-                                    <span class="count" id="count-quente">0</span>
+                                <div class="kanban-column">
+                                    <div class="column-header factual">
+                                        <h3><span class="col-dot col-dot-amber"></span>Factual</h3>
+                                    </div>
+                                    <div class="column-content" id="column-quente"></div>
                                 </div>
-                                <div class="column-content" id="column-quente"></div>
-                            </div>
-                            <div class="kanban-column">
-                                <div class="column-header concluida">
-                                    <h3>✅ Concluída</h3>
-                                    <span class="count" id="count-concluida">0</span>
+                                <div class="kanban-column">
+                                    <div class="column-header concluida">
+                                        <h3><span class="col-dot col-dot-green"></span>Concluída</h3>
+                                    </div>
+                                    <div class="column-content" id="column-concluida"></div>
                                 </div>
-                                <div class="column-content" id="column-concluida"></div>
                             </div>
                         </div>
                         <aside class="feed-sidebar">
-                            <h2>Mural da Redação</h2>
-                            <form onsubmit="postarNoMural(event)" style="display:flex;gap:8px;margin-bottom:16px;">
-                                <input type="text" id="mural-input" placeholder="Postar no mural..." class="search-input" style="font-size:13px;">
-                                <button type="submit" class="btn-primary" style="padding:8px 14px;font-size:13px;white-space:nowrap;">Enviar</button>
-                            </form>
+                            <h2>Mural da redação</h2>
                             <div class="feed-list" id="feed-list"></div>
+                            <form class="mural-form" onsubmit="postarNoMural(event)">
+                                <input type="text" id="mural-input" placeholder="Postar no mural..." class="search-input">
+                                <button type="submit" class="btn-primary">Enviar</button>
+                            </form>
                         </aside>
                     </div>
                 </div>
