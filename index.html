@@ -460,10 +460,10 @@
     <div id="modal-fonte" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Novo Contato/Fonte</h2>
+                <h2 id="modal-fonte-titulo">Novo Contato/Fonte</h2>
                 <button class="close-btn" onclick="closeModal('modal-fonte')">&times;</button>
             </div>
-            <form onsubmit="salvarFonte(event)">
+            <form id="form-fonte" onsubmit="salvarFonte(event)">
                 <div class="form-group">
                     <label>Nome *</label>
                     <input type="text" id="fonte-nome" required placeholder="Nome da pessoa, órgão ou site">
@@ -501,7 +501,7 @@
                     <label>Observações</label>
                     <textarea id="fonte-obs" rows="2" placeholder="Informações adicionais..."></textarea>
                 </div>
-                <button type="submit" class="btn-primary btn-full">Salvar Contato</button>
+                <button type="submit" id="btn-salvar-fonte" class="btn-primary btn-full">Salvar Contato</button>
             </form>
         </div>
     </div>
