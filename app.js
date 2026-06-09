@@ -151,6 +151,20 @@ function setupRealtime() {
         }).subscribe()
 }
 
+
+// ==================== SIDEBAR MOBILE ====================
+function abrirSidebar() {
+    document.querySelector('.sidebar').classList.add('open')
+    document.getElementById('sidebar-overlay').classList.add('active')
+    document.body.style.overflow = 'hidden'
+}
+
+function fecharSidebar() {
+    document.querySelector('.sidebar').classList.remove('open')
+    document.getElementById('sidebar-overlay').classList.remove('active')
+    document.body.style.overflow = ''
+}
+
 // ==================== NAVEGAÇÃO ====================
 function setupNavegacao() {
     const menuItems = document.querySelectorAll('.menu-item')
@@ -162,6 +176,7 @@ function setupNavegacao() {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
             item.classList.add('active')
             document.getElementById(`page-${page}`).classList.add('active')
+            fecharSidebar()
         })
     })
 }
