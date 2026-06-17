@@ -12,11 +12,19 @@ let apuracoes        = []
 let rondas           = []
 let fontes           = []
 let feedItems        = []
-let editandoId       = null
-let editandoFonteId  = null
-let editandoRondaId  = null
-let paginaAtual      = 0
-const POR_PAGINA     = 20
+let editandoId          = null
+let editandoFonteId     = null
+let editandoRondaId     = null
+let editandoDemandaId   = null
+let editandoPautaId     = null
+let paginaAtual         = 0
+const POR_PAGINA        = 20
+let demandas            = []
+let pautasCalendario    = []
+let calendarioMes       = new Date().getMonth()
+let calendarioAno       = new Date().getFullYear()
+let calendarioVista     = 'mes' // 'mes' | 'semana' | 'dia'
+let calendarioDia       = new Date()
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -164,6 +172,16 @@ function setupRealtime() {
             atualizarFiltroAutores()
             renderApuracoes(); renderRegistros()
         }).subscribe()
+
+    db.channel('demandas-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'demandas' }, async () => {
+            await carregarDemandas()
+        }).subscribe()
+
+    db.channel('pautas-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pautas_calendario' }, async () => {
+            await carregarPautasCalendario()
+        }).subscribe()
 }
 
 
@@ -237,12 +255,10 @@ function getIniciais(nome) {
 
 // ==================== CARREGAMENTO GERAL ====================
 async function carregarTudo() {
-    await Promise.all([carregarApuracoes(), carregarRondas(), carregarFontes(), carregarFeed()])
+    await Promise.all([carregarApuracoes(), carregarRondas(), carregarFontes(), carregarFeed(), carregarDemandas(), carregarPautasCalendario()])
     updateCounts()
     renderRegistros()
     atualizarFiltroAutores()
-    calcularRanking()
-    verificarVirадаMes()
 }
 
 // ==================== APURAÇÕES ====================
@@ -646,139 +662,325 @@ async function deletarFonte(id, nome) {
 }
 
 
-// ==================== RANKING DO MÊS ====================
-function calcularRanking() {
-    const agora    = new Date()
-    const mesAtual = agora.getMonth()
-    const anoAtual = agora.getFullYear()
-    const mesPrev  = mesAtual === 0 ? 11 : mesAtual - 1
-    const anoPrev  = mesAtual === 0 ? anoAtual - 1 : anoAtual
 
-    const nomeMes = agora.toLocaleDateString('pt-BR', { month: 'long' })
-    const el = document.getElementById('ranking-mes')
-    if (el) el.textContent = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)
-
-    // Apurações do mês atual
-    const apsMes = apuracoes.filter(a => {
-        const d = new Date(a.created_at)
-        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
-    })
-
-    // Apurações do mês anterior (para indicador "em alta")
-    const apsPrev = apuracoes.filter(a => {
-        const d = new Date(a.created_at)
-        return d.getMonth() === mesPrev && d.getFullYear() === anoPrev
-    })
-
-    // Fontes do mês atual
-    const fontesMes = fontes.filter(f => {
-        const d = new Date(f.created_at)
-        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
-    })
-
-    // Agrupa por autor
-    const autores = {}
-
-    apsMes.forEach(a => {
-        if (!autores[a.autor]) autores[a.autor] = { nome: a.autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
-        autores[a.autor].aps++
-        if (a.classificacao === 'concluida') autores[a.autor].concluidas++
-        if (a.urgente && a.classificacao === 'concluida') autores[a.autor].urgentes++
-    })
-
-    // Fontes adicionadas por cada um (usa userData.nome como proxy — fontes não têm autor direto)
-    // Contamos apenas fontes deste mês associadas ao feed
-    fontesMes.forEach(f => {
-        // Tenta encontrar no feed quem adicionou
-        const feedEntry = feedItems.find(fi =>
-            fi.conteudo && fi.conteudo.includes(f.nome) && fi.conteudo.includes('contato')
-        )
-        const autor = feedEntry ? feedEntry.autor : null
-        if (autor) {
-            if (!autores[autor]) autores[autor] = { nome: autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
-            autores[autor].fontes++
-        }
-    })
-
-    // Mês anterior por autor
-    apsPrev.forEach(a => {
-        if (!autores[a.autor]) autores[a.autor] = { nome: a.autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
-        autores[a.autor].prevAps++
-    })
-
-    // Score total: apurações + fontes + urgentes*2
-    const ranking = Object.values(autores)
-        .map(a => ({ ...a, score: a.aps + a.fontes + (a.urgentes * 2) }))
-        .sort((a, b) => b.score - a.score)
-
-    renderRanking(ranking)
+// ==================== DEMANDAS ====================
+async function carregarDemandas() {
+    const { data, error } = await db.from('demandas').select('*').order('created_at', { ascending: false })
+    if (error) { console.error(error); return }
+    demandas = data
+    renderDemandas()
 }
 
-function renderRanking(ranking) {
-    const list = document.getElementById('ranking-list')
+function renderDemandas() {
+    const list = document.getElementById('demandas-list')
     if (!list) return
     list.innerHTML = ''
 
-    if (!ranking.length) {
-        list.innerHTML = '<div class="ranking-empty">Nenhuma atividade este mês ainda.</div>'
+    const ativas = demandas.filter(d => d.status === 'ativa')
+    const concluidas = demandas.filter(d => d.status === 'concluida')
+
+    if (!ativas.length && !concluidas.length) {
+        list.innerHTML = '<div class="demanda-empty">Nenhuma demanda ativa.</div>'
         return
     }
 
-    const medalhas = ['🥇', '🥈', '🥉']
+    ativas.forEach(d => list.appendChild(createDemandaCard(d)))
+    if (concluidas.length) {
+        const sep = document.createElement('div')
+        sep.className = 'demanda-sep'
+        sep.textContent = `${concluidas.length} concluída${concluidas.length > 1 ? 's' : ''}`
+        list.appendChild(sep)
+        concluidas.slice(0, 3).forEach(d => list.appendChild(createDemandaCard(d)))
+    }
+}
 
-    ranking.forEach((rep, idx) => {
-        const medalha    = idx < 3 ? medalhas[idx] : `${idx + 1}.`
-        const emAlta     = rep.aps > rep.prevAps && rep.prevAps > 0
-        const badgeUrgente = rep.urgentes > 0 ? `<span class="badge-rank-urgente" title="Urgentes concluídas">🔴 ${rep.urgentes}</span>` : ''
-        const badgeAlta    = emAlta ? `<span class="badge-rank-alta" title="Em alta vs mês anterior">↑</span>` : ''
+function createDemandaCard(d) {
+    const div = document.createElement('div')
+    div.className = `demanda-card${d.status === 'concluida' ? ' demanda-concluida' : ''}`
+    div.innerHTML = `
+        <div class="demanda-responsavel">${d.responsavel}</div>
+        <div class="demanda-texto">${d.texto}</div>
+        <div class="demanda-meta">
+            <span>por ${d.criado_por}</span>
+            <span>${formatDate(d.created_at)}</span>
+        </div>
+        <div class="demanda-actions">
+            ${d.status === 'ativa'
+                ? `<button class="btn-action-primary" style="font-size:10px;height:22px;" onclick="concluirDemanda(${d.id})">✓ Concluir</button>`
+                : `<span style="font-size:10px;color:var(--green-dark)">✓ Concluída</span>`
+            }
+            <button class="btn-small btn-deletar" onclick="deletarDemanda(${d.id})" style="height:22px;margin-left:auto;">🗑️</button>
+        </div>
+    `
+    return div
+}
 
-        const div = document.createElement('div')
-        div.className = `ranking-item${idx === 0 ? ' ranking-primeiro' : ''}`
-        div.innerHTML = `
-            <div class="ranking-pos">${medalha}</div>
-            <div class="ranking-info">
-                <div class="ranking-nome">${rep.nome} ${badgeAlta} ${badgeUrgente}</div>
-                <div class="ranking-stats">
-                    <span title="Apurações">${rep.aps} apurações</span>
-                    ${rep.fontes > 0 ? `<span title="Fontes adicionadas">· ${rep.fontes} fontes</span>` : ''}
-                    ${rep.concluidas > 0 ? `<span title="Concluídas">· ${rep.concluidas} concluídas</span>` : ''}
-                </div>
+function openModalDemanda() {
+    editandoDemandaId = null
+    document.getElementById('form-demanda').reset()
+    document.getElementById('modal-demanda').classList.add('active')
+}
+
+async function salvarDemanda(event) {
+    event.preventDefault()
+    const nova = {
+        texto:       document.getElementById('demanda-texto').value,
+        responsavel: document.getElementById('demanda-responsavel').value,
+        criado_por:  userData.nome,
+        status:      'ativa'
+    }
+    const { data, error } = await db.from('demandas').insert([nova]).select().single()
+    if (error) { alert('Erro: ' + error.message); return }
+    demandas.unshift(data)
+    renderDemandas()
+    closeModal('modal-demanda')
+    event.target.reset()
+    await addToFeed(userData.nome, `📋 Demanda para ${nova.responsavel}: "${nova.texto}"`)
+}
+
+async function concluirDemanda(id) {
+    const { error } = await db.from('demandas').update({ status: 'concluida' }).eq('id', id)
+    if (error) { alert('Erro: ' + error.message); return }
+    const d = demandas.find(d => d.id === id)
+    if (d) {
+        d.status = 'concluida'
+        await addToFeed(userData.nome, `✅ Demanda concluída: "${d.texto}" (${d.responsavel})`)
+    }
+    renderDemandas()
+}
+
+async function deletarDemanda(id) {
+    if (!confirm('Remover esta demanda?')) return
+    const { error } = await db.from('demandas').delete().eq('id', id)
+    if (error) { alert('Erro: ' + error.message); return }
+    demandas = demandas.filter(d => d.id !== id)
+    renderDemandas()
+}
+
+// ==================== CALENDÁRIO ====================
+async function carregarPautasCalendario() {
+    const { data, error } = await db.from('pautas_calendario').select('*').order('data_pauta', { ascending: true })
+    if (error) { console.error(error); return }
+    pautasCalendario = data
+    renderCalendario()
+}
+
+function renderCalendario() {
+    const el = document.getElementById('calendario-body')
+    if (!el) return
+
+    if (calendarioVista === 'mes')   renderCalendarioMes(el)
+    if (calendarioVista === 'semana') renderCalendarioSemana(el)
+    if (calendarioVista === 'dia')   renderCalendarioDia(el)
+
+    // Atualiza título
+    const titulo = document.getElementById('calendario-titulo')
+    if (titulo) {
+        if (calendarioVista === 'mes') {
+            titulo.textContent = new Date(calendarioAno, calendarioMes, 1)
+                .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        } else if (calendarioVista === 'semana') {
+            const ini = getInicioSemana(calendarioDia)
+            const fim = new Date(ini); fim.setDate(fim.getDate() + 6)
+            titulo.textContent = `${ini.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${fim.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+        } else {
+            titulo.textContent = calendarioDia.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+        }
+    }
+}
+
+function renderCalendarioMes(el) {
+    const primeiroDia = new Date(calendarioAno, calendarioMes, 1)
+    const ultimoDia   = new Date(calendarioAno, calendarioMes + 1, 0)
+    const diasSemana  = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    const hoje = new Date()
+
+    let html = `<div class="cal-grid-mes">`
+    diasSemana.forEach(d => { html += `<div class="cal-header-dia">${d}</div>` })
+
+    // Dias vazios antes do primeiro
+    for (let i = 0; i < primeiroDia.getDay(); i++) html += `<div class="cal-dia cal-dia-vazio"></div>`
+
+    for (let d = 1; d <= ultimoDia.getDate(); d++) {
+        const dataStr = `${calendarioAno}-${String(calendarioMes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        const pautas  = pautasCalendario.filter(p => p.data_pauta === dataStr)
+        const isHoje  = hoje.getDate() === d && hoje.getMonth() === calendarioMes && hoje.getFullYear() === calendarioAno
+        html += `<div class="cal-dia${isHoje ? ' cal-dia-hoje' : ''}" onclick="abrirDia(${d})">
+            <div class="cal-dia-num">${d}</div>
+            ${pautas.slice(0, 2).map(p => `<div class="cal-pauta-pill cal-tipo-${p.tipo}">${p.titulo}</div>`).join('')}
+            ${pautas.length > 2 ? `<div class="cal-mais">+${pautas.length - 2}</div>` : ''}
+        </div>`
+    }
+    html += `</div>`
+    el.innerHTML = html
+}
+
+function renderCalendarioSemana(el) {
+    const ini = getInicioSemana(calendarioDia)
+    const horas = Array.from({length: 24}, (_, i) => i)
+    const dias  = Array.from({length: 7}, (_, i) => { const d = new Date(ini); d.setDate(d.getDate() + i); return d })
+
+    let html = `<div class="cal-grid-semana">
+        <div class="cal-hora-col"></div>`
+    dias.forEach(d => {
+        const hoje = new Date()
+        const isHoje = d.toDateString() === hoje.toDateString()
+        html += `<div class="cal-sem-header${isHoje ? ' cal-dia-hoje' : ''}">
+            <div>${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]}</div>
+            <div class="cal-sem-num">${d.getDate()}</div>
+        </div>`
+    })
+
+    horas.forEach(h => {
+        html += `<div class="cal-hora">${String(h).padStart(2,'0')}:00</div>`
+        dias.forEach(d => {
+            const dataStr = d.toISOString().split('T')[0]
+            const pautas = pautasCalendario.filter(p => {
+                if (p.data_pauta !== dataStr) return false
+                if (!p.hora_inicio) return false
+                return parseInt(p.hora_inicio.split(':')[0]) === h
+            })
+            html += `<div class="cal-slot" onclick="abrirNovaPautaHora('${dataStr}', '${String(h).padStart(2,'0')}:00')">
+                ${pautas.map(p => `<div class="cal-evento cal-tipo-${p.tipo}" onclick="event.stopPropagation();abrirPauta(${p.id})">${p.titulo}</div>`).join('')}
+            </div>`
+        })
+    })
+    html += `</div>`
+    el.innerHTML = html
+}
+
+function renderCalendarioDia(el) {
+    const dataStr = calendarioDia.toISOString().split('T')[0]
+    const pautas  = pautasCalendario.filter(p => p.data_pauta === dataStr)
+    const horas   = Array.from({length: 24}, (_, i) => i)
+
+    let html = `<div class="cal-grid-dia">`
+    horas.forEach(h => {
+        const ps = pautas.filter(p => p.hora_inicio && parseInt(p.hora_inicio.split(':')[0]) === h)
+        html += `<div class="cal-dia-linha">
+            <div class="cal-hora">${String(h).padStart(2,'0')}:00</div>
+            <div class="cal-slot cal-slot-dia" onclick="abrirNovaPautaHora('${dataStr}', '${String(h).padStart(2,'0')}:00')">
+                ${ps.map(p => `<div class="cal-evento cal-tipo-${p.tipo}" onclick="event.stopPropagation();abrirPauta(${p.id})">
+                    <strong>${p.titulo}</strong>
+                    ${p.responsavel ? `<span> · ${p.responsavel}</span>` : ''}
+                    ${p.descricao ? `<div>${p.descricao}</div>` : ''}
+                </div>`).join('')}
             </div>
-            <div class="ranking-score">${rep.score}</div>
-        `
-        list.appendChild(div)
+        </div>`
     })
+    html += `</div>`
+    el.innerHTML = html
 }
 
-// Post automático no mural na virada do mês
-function verificarVirадаMes() {
-    const agora    = new Date()
-    const chave    = `ranking_postado_${agora.getFullYear()}_${agora.getMonth()}`
-    if (localStorage.getItem(chave)) return
-    if (agora.getDate() !== 1) return // só no dia 1
-
-    // Calcula ranking do mês anterior para postar
-    const mesPrev  = agora.getMonth() === 0 ? 11 : agora.getMonth() - 1
-    const anoPrev  = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear()
-    const nomeMes  = new Date(anoPrev, mesPrev, 1).toLocaleDateString('pt-BR', { month: 'long' })
-
-    const apsPrev = apuracoes.filter(a => {
-        const d = new Date(a.created_at)
-        return d.getMonth() === mesPrev && d.getFullYear() === anoPrev
-    })
-
-    if (!apsPrev.length) return
-
-    const contagem = {}
-    apsPrev.forEach(a => { contagem[a.autor] = (contagem[a.autor] || 0) + 1 })
-    const top = Object.entries(contagem).sort((a, b) => b[1] - a[1])
-    if (!top.length) return
-
-    const [nome, qtd] = top[0]
-    const msg = `🏆 Ranking de ${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}: ${nome} foi o destaque com ${qtd} apurações!`
-    addToFeed('Sistema', msg)
-    localStorage.setItem(chave, '1')
+function getInicioSemana(data) {
+    const d = new Date(data)
+    d.setDate(d.getDate() - d.getDay())
+    d.setHours(0,0,0,0)
+    return d
 }
+
+function mudarVista(vista) {
+    calendarioVista = vista
+    document.querySelectorAll('.cal-btn-vista').forEach(b => b.classList.remove('active'))
+    document.getElementById(`cal-btn-${vista}`)?.classList.add('active')
+    renderCalendario()
+}
+
+function navCalendario(dir) {
+    if (calendarioVista === 'mes') {
+        calendarioMes += dir
+        if (calendarioMes < 0)  { calendarioMes = 11; calendarioAno-- }
+        if (calendarioMes > 11) { calendarioMes = 0;  calendarioAno++ }
+    } else if (calendarioVista === 'semana') {
+        calendarioDia = new Date(calendarioDia)
+        calendarioDia.setDate(calendarioDia.getDate() + dir * 7)
+    } else {
+        calendarioDia = new Date(calendarioDia)
+        calendarioDia.setDate(calendarioDia.getDate() + dir)
+    }
+    renderCalendario()
+}
+
+function abrirDia(dia) {
+    calendarioDia = new Date(calendarioAno, calendarioMes, dia)
+    calendarioVista = 'dia'
+    mudarVista('dia')
+}
+
+function abrirNovaPautaHora(dataStr, hora) {
+    document.getElementById('pauta-data').value = dataStr
+    document.getElementById('pauta-hora-inicio').value = hora
+    openModalPauta()
+}
+
+function abrirPauta(id) {
+    const p = pautasCalendario.find(p => p.id === id)
+    if (!p) return
+    editandoPautaId = id
+    document.getElementById('pauta-titulo').value       = p.titulo
+    document.getElementById('pauta-descricao').value    = p.descricao || ''
+    document.getElementById('pauta-responsavel').value  = p.responsavel
+    document.getElementById('pauta-data').value         = p.data_pauta
+    document.getElementById('pauta-hora-inicio').value  = p.hora_inicio || ''
+    document.getElementById('pauta-hora-fim').value     = p.hora_fim || ''
+    document.getElementById('pauta-tipo').value         = p.tipo
+    document.getElementById('modal-pauta-titulo').textContent = 'Editar Pauta'
+    document.getElementById('btn-salvar-pauta').textContent   = 'Salvar Alterações'
+    document.getElementById('modal-pauta').classList.add('active')
+}
+
+function openModalPauta() {
+    if (!editandoPautaId) {
+        document.getElementById('form-pauta').reset()
+        document.getElementById('modal-pauta-titulo').textContent = 'Nova Pauta'
+        document.getElementById('btn-salvar-pauta').textContent   = 'Salvar Pauta'
+    }
+    document.getElementById('modal-pauta').classList.add('active')
+}
+
+async function salvarPauta(event) {
+    event.preventDefault()
+    const dados = {
+        titulo:      document.getElementById('pauta-titulo').value,
+        descricao:   document.getElementById('pauta-descricao').value || null,
+        responsavel: document.getElementById('pauta-responsavel').value,
+        data_pauta:  document.getElementById('pauta-data').value,
+        hora_inicio: document.getElementById('pauta-hora-inicio').value || null,
+        hora_fim:    document.getElementById('pauta-hora-fim').value    || null,
+        tipo:        document.getElementById('pauta-tipo').value
+    }
+    if (editandoPautaId) {
+        const { data, error } = await db.from('pautas_calendario').update(dados).eq('id', editandoPautaId).select().single()
+        if (error) { alert('Erro: ' + error.message); return }
+        const idx = pautasCalendario.findIndex(p => p.id === editandoPautaId)
+        if (idx !== -1) pautasCalendario[idx] = data
+    } else {
+        const { data, error } = await db.from('pautas_calendario').insert([dados]).select().single()
+        if (error) { alert('Erro: ' + error.message); return }
+        pautasCalendario.push(data)
+        await addToFeed(userData.nome, `📅 Nova pauta: "${dados.titulo}" em ${formatarData(dados.data_pauta)} para ${dados.responsavel}`)
+    }
+    renderCalendario()
+    closeModal('modal-pauta')
+    event.target.reset()
+    editandoPautaId = null
+}
+
+async function deletarPauta(id) {
+    if (!confirm('Remover esta pauta?')) return
+    const { error } = await db.from('pautas_calendario').delete().eq('id', id)
+    if (error) { alert('Erro: ' + error.message); return }
+    pautasCalendario = pautasCalendario.filter(p => p.id !== id)
+    renderCalendario()
+    closeModal('modal-pauta')
+}
+
+function formatarData(str) {
+    if (!str) return ''
+    const [y, m, d] = str.split('-')
+    return `${d}/${m}/${y}`
+}
+
 
 // ==================== REGISTROS ====================
 function renderRegistros() {
