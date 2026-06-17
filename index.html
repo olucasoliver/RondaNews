@@ -310,6 +310,9 @@
                     <a href="#" class="menu-item" data-page="registros">
                         <span class="icon">≡</span> Registros
                     </a>
+                    <a href="#" class="menu-item" data-page="calendario">
+                        <span class="icon">📅</span> Calendário
+                    </a>
                     <div class="menu-section">Conta</div>
                     <a href="#" class="menu-item" data-page="perfil">
                         <span class="icon">○</span> Perfil
@@ -395,14 +398,6 @@
                             </div>
                         </div>
                         <aside class="feed-sidebar">
-                            <div class="ranking-panel">
-                                <div class="panel-hd">
-                                    <span style="font-size:15px">🏆</span>
-                                    <span class="panel-hd-title">Ranking do mês</span>
-                                    <span class="panel-hd-mes" id="ranking-mes"></span>
-                                </div>
-                                <div class="ranking-list" id="ranking-list"></div>
-                            </div>
                             <div class="panel-hd">
                                 <span style="font-size:14px;color:var(--blue)">💬</span>
                                 <span class="panel-hd-title">Mural da redação</span>
@@ -413,6 +408,30 @@
                                 <button type="submit" class="btn-primary">Enviar</button>
                             </form>
                         </aside>
+                    </div>
+                </div>
+
+
+                <!-- PÁGINA: CALENDÁRIO -->
+                <div id="page-calendario" class="page">
+                    <header class="header">
+                        <h1>Calendário de Pautas</h1>
+                        <button class="btn-primary" onclick="editandoPautaId=null;openModalPauta()">+ Nova Pauta</button>
+                    </header>
+                    <div style="padding:0 28px 28px;">
+                        <div class="cal-toolbar">
+                            <div class="cal-nav">
+                                <button class="btn-secondary" style="height:30px;padding:0 10px;" onclick="navCalendario(-1)">‹</button>
+                                <span id="calendario-titulo" style="font-size:14px;font-weight:500;min-width:200px;text-align:center;"></span>
+                                <button class="btn-secondary" style="height:30px;padding:0 10px;" onclick="navCalendario(1)">›</button>
+                            </div>
+                            <div style="display:flex;gap:4px;">
+                                <button id="cal-btn-mes"    class="cal-btn-vista active" onclick="mudarVista('mes')">Mês</button>
+                                <button id="cal-btn-semana" class="cal-btn-vista"         onclick="mudarVista('semana')">Semana</button>
+                                <button id="cal-btn-dia"    class="cal-btn-vista"         onclick="mudarVista('dia')">Dia</button>
+                            </div>
+                        </div>
+                        <div id="calendario-body" class="cal-body"></div>
                     </div>
                 </div>
 
@@ -522,30 +541,6 @@
             </main>
         </div>
     </div>
-
-
-                <!-- PÁGINA: CALENDÁRIO -->
-                <div id="page-calendario" class="page">
-                    <header class="header">
-                        <h1>Calendário de Pautas</h1>
-                        <button class="btn-primary" onclick="editandoPautaId=null;openModalPauta()">+ Nova Pauta</button>
-                    </header>
-                    <div style="padding:0 28px 28px;">
-                        <div class="cal-toolbar">
-                            <div class="cal-nav">
-                                <button class="btn-secondary" style="height:30px;padding:0 10px;" onclick="navCalendario(-1)">‹</button>
-                                <span id="calendario-titulo" style="font-size:14px;font-weight:500;min-width:200px;text-align:center;"></span>
-                                <button class="btn-secondary" style="height:30px;padding:0 10px;" onclick="navCalendario(1)">›</button>
-                            </div>
-                            <div style="display:flex;gap:4px;">
-                                <button id="cal-btn-mes"    class="cal-btn-vista active" onclick="mudarVista('mes')">Mês</button>
-                                <button id="cal-btn-semana" class="cal-btn-vista"         onclick="mudarVista('semana')">Semana</button>
-                                <button id="cal-btn-dia"    class="cal-btn-vista"         onclick="mudarVista('dia')">Dia</button>
-                            </div>
-                        </div>
-                        <div id="calendario-body" class="cal-body"></div>
-                    </div>
-                </div>
 
     <!-- MODAL: NOVA DEMANDA -->
     <div id="modal-demanda" class="modal">
