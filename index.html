@@ -430,7 +430,7 @@
                     </div>
                 </div>
 
-                <!-- PÁGINA: FONTES -->
+                               <!-- PÁGINA: FONTES -->
                 <div id="page-fontes" class="page">
                     <header class="header">
                         <h1>Banco de Fontes e Contatos</h1>
@@ -513,13 +513,16 @@
                     </div>
                 </div>
 
-                <!-- PÁGINA: CALENDÁRIO -->
+                <!-- PÁGINA: CALENDÁRIO (LAYOUT FULLSCREEN) -->
                 <div id="page-calendario" class="page">
-                    <header class="header">
-                        <h1>Calendário de Pautas</h1>
-                        <button class="btn-primary" onclick="editandoPautaId=null;openModalPauta()">+ Nova Pauta</button>
-                    </header>
-                    <div style="padding:0 16px 16px;flex:1;display:flex;flex-direction:column;">
+                    <div class="page-topbar">
+                        <button class="btn-hamburger" onclick="abrirSidebar()" aria-label="Menu">☰</button>
+                        <span class="page-topbar-title">Calendário de Pautas</span>
+                        <div class="page-topbar-actions">
+                            <button class="btn-primary" onclick="editandoPautaId=null;openModalPauta()" style="height:30px;font-size:12px;">+ Nova Pauta</button>
+                        </div>
+                    </div>
+                    <div class="cal-container">
                         <div class="cal-toolbar">
                             <div class="cal-nav">
                                 <button class="btn-secondary" style="height:30px;padding:0 10px;" onclick="navCalendario(-1)">‹</button>
@@ -536,210 +539,6 @@
                     </div>
                 </div>
 
-
-            </main>
-        </div>
-    </div>
-
-    <!-- MODAL: NOVA DEMANDA -->
-    <div id="modal-demanda" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Nova Demanda</h2>
-                <button class="close-btn" onclick="closeModal('modal-demanda')">&times;</button>
-            </div>
-            <form id="form-demanda" onsubmit="salvarDemanda(event)">
-                <div class="form-group">
-                    <label>Responsável *</label>
-                    <input type="text" id="demanda-responsavel" required placeholder="Nome de quem vai executar">
-                </div>
-                <div class="form-group">
-                    <label>Demanda *</label>
-                    <textarea id="demanda-texto" rows="3" required placeholder="Ex: Apurar acidente na Av. Afonso Pena, falar com Bombeiros..."></textarea>
-                </div>
-                <button type="submit" class="btn-primary btn-full">Salvar Demanda</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL: NOVA PAUTA -->
-    <div id="modal-pauta" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-pauta-titulo">Nova Pauta</h2>
-                <button class="close-btn" onclick="closeModal('modal-pauta');editandoPautaId=null">&times;</button>
-            </div>
-            <form id="form-pauta" onsubmit="salvarPauta(event)">
-                <div class="form-group">
-                    <label>Título *</label>
-                    <input type="text" id="pauta-titulo" required placeholder="Ex: Gravação entrevista prefeito">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Responsável *</label>
-                        <input type="text" id="pauta-responsavel" required placeholder="Nome do repórter">
-                    </div>
-                    <div class="form-group">
-                        <label>Tipo</label>
-                        <select id="pauta-tipo">
-                            <option value="pauta">Pauta</option>
-                            <option value="gravacao">Gravação</option>
-                            <option value="reuniao">Reunião</option>
-                            <option value="outro">Outro</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Data *</label>
-                    <input type="date" id="pauta-data" required>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Horário início</label>
-                        <input type="time" id="pauta-hora-inicio">
-                    </div>
-                    <div class="form-group">
-                        <label>Horário fim</label>
-                        <input type="time" id="pauta-hora-fim">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Descrição</label>
-                    <textarea id="pauta-descricao" rows="2" placeholder="Detalhes adicionais..."></textarea>
-                </div>
-                <div style="display:flex;gap:8px;">
-                    <button type="submit" id="btn-salvar-pauta" class="btn-primary btn-full">Salvar Pauta</button>
-                    <button type="button" class="btn-secondary" id="btn-deletar-pauta" style="display:none;" onclick="deletarPauta(editandoPautaId)">🗑️</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL: NOVA APURAÇÃO -->
-    <div id="modal-apuracao" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-apuracao-titulo">Novo Registro de Apuração</h2>
-                <button class="close-btn" onclick="closeModal('modal-apuracao')">&times;</button>
-            </div>
-            <form id="form-apuracao" onsubmit="salvarApuracao(event)">
-                <div class="form-group">
-                    <label>Título da Apuração *</label>
-                    <input type="text" id="apuracao-titulo" required placeholder="Ex: Checker Diário Oficial">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Fonte *</label>
-                        <input type="text" id="apuracao-fonte" required placeholder="Ex: Sindicato">
-                    </div>
-                    <div class="form-group">
-                        <label>Classificação</label>
-                        <select id="apuracao-classificacao">
-                            <option value="andamento">Em Andamento</option>
-                            <option value="quente">Factual</option>
-                            <option value="concluida">✅ Concluída</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Descrição *</label>
-                    <textarea id="apuracao-descricao" rows="3" required placeholder="Descreva o que está sendo apurado..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Link/Referência</label>
-                    <input type="url" id="apuracao-link" placeholder="https://...">
-                </div>
-                <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-                    <input type="checkbox" id="apuracao-urgente" style="width:auto;">
-                    <label for="apuracao-urgente" style="font-weight:600;color:#e53e3e;cursor:pointer;margin:0;">🔴 Marcar como URGENTE</label>
-                </div>
-                <button type="submit" id="btn-salvar-apuracao" class="btn-primary btn-full">Salvar Registro</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL: NOVA RONDA -->
-    <div id="modal-ronda" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-ronda-titulo">Nova Ronda de Apuração</h2>
-                <button class="close-btn" onclick="closeModal('modal-ronda')">&times;</button>
-            </div>
-            <form id="form-ronda" onsubmit="salvarRonda(event)">
-                <div class="form-group">
-                    <label>Nome da Ronda *</label>
-                    <input type="text" id="ronda-nome" required placeholder="Ex: Monitoramento Câmara Municipal">
-                </div>
-                <div class="form-group">
-                    <label>Descrição</label>
-                    <textarea id="ronda-descricao" rows="2" placeholder="Descreva o objetivo desta ronda..."></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Periodicidade</label>
-                        <select id="ronda-periodicidade">
-                            <option value="diaria">Diária</option>
-                            <option value="semanal">Semanal</option>
-                            <option value="quinzenal">Quinzenal</option>
-                            <option value="mensal">Mensal</option>
-                            <option value="unica">Única</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select id="ronda-status">
-                            <option value="ativa">Ativa</option>
-                            <option value="pausada">Pausada</option>
-                        </select>
-                    </div>
-                </div>
-                <button type="submit" id="btn-salvar-ronda" class="btn-primary btn-full">Criar Ronda</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL: NOVA FONTE -->
-    <div id="modal-fonte" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-fonte-titulo">Novo Contato</h2>
-                <button class="close-btn" onclick="closeModal('modal-fonte')">&times;</button>
-            </div>
-            <form id="form-fonte" onsubmit="salvarFonte(event)">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Nome *</label>
-                        <input type="text" id="fonte-nome" required placeholder="Nome da pessoa ou órgão">
-                    </div>
-                    <div class="form-group">
-                        <label>Função/Cargo *</label>
-                        <input type="text" id="fonte-funcao" required placeholder="Ex: Secretário de Saúde">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Cidade</label>
-                    <input type="text" id="fonte-cidade" placeholder="Ex: Campo Grande">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Telefone</label>
-                        <input type="tel" id="fonte-telefone" placeholder="(67) 99999-9999">
-                    </div>
-                    <div class="form-group">
-                        <label>E-mail</label>
-                        <input type="email" id="fonte-email" placeholder="contato@exemplo.com">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Observações</label>
-                    <textarea id="fonte-obs" rows="2" placeholder="Informações adicionais..."></textarea>
-                </div>
-                <button type="submit" id="btn-salvar-fonte" class="btn-primary btn-full">Salvar Contato</button>
-            </form>
-        </div>
-    </div>
-
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js"></script>
+            </main> <!-- Fim do main-content -->
 </body>
 </html>
