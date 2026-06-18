@@ -12,11 +12,19 @@ let apuracoes        = []
 let rondas           = []
 let fontes           = []
 let feedItems        = []
+let demandas         = []
 let editandoId       = null
 let editandoFonteId  = null
 let editandoRondaId  = null
+let editandoPautaId  = null
 let paginaAtual      = 0
 const POR_PAGINA     = 20
+
+// Calendário
+let calAno = new Date().getFullYear()
+let calMes = new Date().getMonth()
+let calVista = 'mes'
+let todasPautas = []
 
 // ==================== INICIALIZAÇÃO ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -131,7 +139,6 @@ function setupRealtime() {
             if (!feedItems.find(f => f.id === payload.new.id)) {
                 feedItems.unshift(payload.new)
                 renderFeed()
-                // Notifica posts manuais de outros usuários
                 if (payload.new.autor !== userData.nome) {
                     dispararNotificacao('Mural da Redação', `${payload.new.autor}: ${payload.new.conteudo}`)
                 }
@@ -144,7 +151,6 @@ function setupRealtime() {
                 apuracoes.unshift(payload.new)
                 atualizarFiltroAutores()
                 renderApuracoes(); renderRegistros()
-                // Notifica nova apuração urgente ou qualquer nova de outro usuário
                 if (payload.new.autor !== userData.nome) {
                     const prefixo = payload.new.urgente ? '🔴 URGENTE — ' : ''
                     dispararNotificacao(`${prefixo}Nova apuração`, `${payload.new.autor}: ${payload.new.titulo}`)
@@ -163,6 +169,11 @@ function setupRealtime() {
             apuracoes = apuracoes.filter(a => a.id !== payload.old.id)
             atualizarFiltroAutores()
             renderApuracoes(); renderRegistros()
+        }).subscribe()
+
+    db.channel('demandas-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'demandas' }, () => {
+            carregarDemandas()
         }).subscribe()
 }
 
@@ -237,12 +248,13 @@ function getIniciais(nome) {
 
 // ==================== CARREGAMENTO GERAL ====================
 async function carregarTudo() {
-    await Promise.all([carregarApuracoes(), carregarRondas(), carregarFontes(), carregarFeed()])
+    await Promise.all([carregarApuracoes(), carregarRondas(), carregarFontes(), carregarFeed(), carregarDemandas(), carregarPautas()])
     updateCounts()
     renderRegistros()
     atualizarFiltroAutores()
     calcularRanking()
-    verificarVirадаMes()
+    verificarViradaMes()
+    renderCalendario()
 }
 
 // ==================== APURAÇÕES ====================
@@ -645,6 +657,204 @@ async function deletarFonte(id, nome) {
     await addToFeed(userData.nome, `Removeu o contato: "${nome}"`)
 }
 
+// ==================== DEMANDAS ====================
+async function carregarDemandas() {
+    const { data, error } = await db.from('demandas').select('*').order('created_at', { ascending: true })
+    if (error) { console.error(error); return }
+    demandas = data
+    renderDemandas()
+}
+
+function renderDemandas() {
+    const list = document.getElementById('demandas-list')
+    if (!list) return
+    list.innerHTML = ''
+    
+    const ativas = demandas.filter(d => d.status === 'ativa')
+    const concluidas = demandas.filter(d => d.status === 'concluida')
+    
+    if (!ativas.length && !concluidas.length) {
+        list.innerHTML = '<div class="demanda-empty">Nenhuma demanda no momento.</div>'
+        return
+    }
+    
+    ativas.forEach(d => list.appendChild(criarCardDemanda(d)))
+    
+    if (concluidas.length > 0 && ativas.length > 0) {
+        const sep = document.createElement('div')
+        sep.className = 'demanda-sep'
+        sep.textContent = 'Concluídas'
+        list.appendChild(sep)
+    }
+    
+    concluidas.forEach(d => list.appendChild(criarCardDemanda(d)))
+}
+
+function criarCardDemanda(d) {
+    const div = document.createElement('div')
+    div.className = `demanda-card${d.status === 'concluida' ? ' demanda-concluida' : ''}`
+    div.innerHTML = `
+        <div class="demanda-responsavel">${d.responsavel}</div>
+        <div class="demanda-texto">${d.texto}</div>
+        <div class="demanda-meta">
+            <span>${formatDate(d.created_at)}</span>
+            <span>Por: ${d.criado_por}</span>
+        </div>
+        <div class="demanda-actions">
+            ${d.status === 'ativa' ? `<button class="btn-small" onclick="concluirDemanda(${d.id})" style="color:var(--green-dark);border-color:var(--green-bd);">✓ Concluir</button>` : ''}
+            <button class="btn-small btn-deletar" onclick="deletarDemanda(${d.id})">🗑️</button>
+        </div>
+    `
+    return div
+}
+
+function openModalDemanda() {
+    document.getElementById('form-demanda').reset()
+    document.getElementById('modal-demanda').classList.add('active')
+}
+
+async function salvarDemanda(event) {
+    event.preventDefault()
+    const dados = {
+        responsavel: document.getElementById('demanda-responsavel').value,
+        texto:       document.getElementById('demanda-texto').value,
+        criado_por:  userData.nome,
+        status:      'ativa'
+    }
+    const { data, error } = await db.from('demandas').insert([dados]).select().single()
+    if (error) { alert('Erro ao salvar demanda: ' + error.message); return }
+    await addToFeed(userData.nome, `Nova demanda para ${dados.responsavel}: "${dados.texto}"`)
+    carregarDemandas() 
+    closeModal('modal-demanda')
+}
+
+async function concluirDemanda(id) {
+    const { error } = await db.from('demandas').update({ status: 'concluida' }).eq('id', id)
+    if (error) { alert('Erro ao concluir: ' + error.message); return }
+    carregarDemandas()
+}
+
+async function deletarDemanda(id) {
+    if (!confirm('Deletar esta demanda?')) return
+    const { error } = await db.from('demandas').delete().eq('id', id)
+    if (error) { alert('Erro ao deletar: ' + error.message); return }
+    carregarDemandas()
+}
+
+// ==================== CALENDÁRIO E PAUTAS ====================
+async function carregarPautas() {
+    const { data, error } = await db.from('pautas_calendario').select('*').order('data_pauta', { ascending: true })
+    if (error) { console.error(error); return }
+    todasPautas = data
+}
+
+function navCalendario(dir) {
+    calMes += dir
+    if (calMes > 11) { calMes = 0; calAno++ }
+    if (calMes < 0)  { calMes = 11; calAno-- }
+    renderCalendario()
+}
+
+function mudarVista(vista) {
+    calVista = vista
+    document.querySelectorAll('.cal-btn-vista').forEach(b => b.classList.remove('active'))
+    document.getElementById(`cal-btn-${vista}`).classList.add('active')
+    renderCalendario()
+}
+
+function renderCalendario() {
+    const body = document.getElementById('calendario-body')
+    const titulo = document.getElementById('calendario-titulo')
+    if (!body || !titulo) return
+
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    titulo.textContent = `${meses[calMes]} ${calAno}`
+    body.innerHTML = ''
+
+    if (calVista === 'mes') renderGradeMes(body)
+    else if (calVista === 'semana') body.innerHTML = '<p style="padding:20px;color:var(--text-3)">Visão semanal em desenvolvimento.</p>'
+    else body.innerHTML = '<p style="padding:20px;color:var(--text-3)">Visão diária em desenvolvimento.</p>'
+}
+
+function renderGradeMes(body) {
+    const primeiroDia = new Date(calAno, calMes, 1).getDay()
+    const diasNoMes = new Date(calAno, calMes + 1, 0).getDate()
+    const hoje = new Date()
+
+    let html = '<div class="cal-grid-mes">'
+    const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+    diasSemana.forEach(d => html += `<div class="cal-header-dia">${d}</div>`)
+
+    for (let i = 0; i < primeiroDia; i++) html += '<div class="cal-dia cal-dia-vazio"></div>'
+
+    for (let dia = 1; dia <= diasNoMes; dia++) {
+        const isHoje = dia === hoje.getDate() && calMes === hoje.getMonth() && calAno === hoje.getFullYear()
+        const dataStr = `${calAno}-${String(calMes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+        const pautasDia = todasPautas.filter(p => p.data_pauta === dataStr)
+
+        html += `<div class="cal-dia${isHoje ? ' cal-dia-hoje' : ''}" onclick="abrirModalPautaData('${dataStr}')">
+            <div class="cal-dia-num">${dia}</div>
+            ${pautasDia.slice(0,2).map(p => `<div class="cal-pauta-pill cal-tipo-${p.tipo}">${p.titulo}</div>`).join('')}
+            ${pautasDia.length > 2 ? `<div class="cal-mais">+${pautasDia.length - 2} mais</div>` : ''}
+        </div>`
+    }
+    html += '</div>'
+    body.innerHTML = html
+}
+
+function abrirModalPautaData(data) {
+    editandoPautaId = null
+    document.getElementById('form-pauta').reset()
+    document.getElementById('pauta-data').value = data
+    document.getElementById('modal-pauta-titulo').textContent = 'Nova Pauta'
+    document.getElementById('btn-deletar-pauta').style.display = 'none'
+    document.getElementById('modal-pauta').classList.add('active')
+}
+
+function openModalPauta() {
+    editandoPautaId = null
+    document.getElementById('form-pauta').reset()
+    document.getElementById('modal-pauta-titulo').textContent = 'Nova Pauta'
+    document.getElementById('btn-deletar-pauta').style.display = 'none'
+    document.getElementById('modal-pauta').classList.add('active')
+}
+
+async function salvarPauta(event) {
+    event.preventDefault()
+    const dados = {
+        titulo:      document.getElementById('pauta-titulo').value,
+        responsavel: document.getElementById('pauta-responsavel').value,
+        tipo:        document.getElementById('pauta-tipo').value,
+        data_pauta:  document.getElementById('pauta-data').value,
+        hora_inicio: document.getElementById('pauta-hora-inicio').value || null,
+        hora_fim:    document.getElementById('pauta-hora-fim').value || null,
+        descricao:   document.getElementById('pauta-descricao').value || null
+    }
+
+    if (editandoPautaId) {
+        const { data, error } = await db.from('pautas_calendario').update(dados).eq('id', editandoPautaId).select().single()
+        if (error) { alert('Erro ao editar: ' + error.message); return }
+        await addToFeed(userData.nome, `Editou a pauta: "${data.titulo}"`)
+    } else {
+        const { data, error } = await db.from('pautas_calendario').insert([dados]).select().single()
+        if (error) { alert('Erro ao salvar: ' + error.message); return }
+        await addToFeed(userData.nome, `Criou nova pauta: "${data.titulo}"`)
+    }
+    await carregarPautas()
+    renderCalendario()
+    closeModal('modal-pauta')
+    editandoPautaId = null
+}
+
+async function deletarPauta(id) {
+    if (!confirm('Deletar esta pauta?')) return
+    const { error } = await db.from('pautas_calendario').delete().eq('id', id)
+    if (error) { alert('Erro ao deletar: ' + error.message); return }
+    await carregarPautas()
+    renderCalendario()
+    closeModal('modal-pauta')
+    editandoPautaId = null
+}
 
 // ==================== RANKING DO MÊS ====================
 function calcularRanking() {
@@ -658,25 +868,21 @@ function calcularRanking() {
     const el = document.getElementById('ranking-mes')
     if (el) el.textContent = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)
 
-    // Apurações do mês atual
     const apsMes = apuracoes.filter(a => {
         const d = new Date(a.created_at)
         return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
     })
 
-    // Apurações do mês anterior (para indicador "em alta")
     const apsPrev = apuracoes.filter(a => {
         const d = new Date(a.created_at)
         return d.getMonth() === mesPrev && d.getFullYear() === anoPrev
     })
 
-    // Fontes do mês atual
     const fontesMes = fontes.filter(f => {
         const d = new Date(f.created_at)
         return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
     })
 
-    // Agrupa por autor
     const autores = {}
 
     apsMes.forEach(a => {
@@ -686,10 +892,7 @@ function calcularRanking() {
         if (a.urgente && a.classificacao === 'concluida') autores[a.autor].urgentes++
     })
 
-    // Fontes adicionadas por cada um (usa userData.nome como proxy — fontes não têm autor direto)
-    // Contamos apenas fontes deste mês associadas ao feed
     fontesMes.forEach(f => {
-        // Tenta encontrar no feed quem adicionou
         const feedEntry = feedItems.find(fi =>
             fi.conteudo && fi.conteudo.includes(f.nome) && fi.conteudo.includes('contato')
         )
@@ -700,13 +903,11 @@ function calcularRanking() {
         }
     })
 
-    // Mês anterior por autor
     apsPrev.forEach(a => {
         if (!autores[a.autor]) autores[a.autor] = { nome: a.autor, aps: 0, concluidas: 0, urgentes: 0, fontes: 0, prevAps: 0 }
         autores[a.autor].prevAps++
     })
 
-    // Score total: apurações + fontes + urgentes*2
     const ranking = Object.values(autores)
         .map(a => ({ ...a, score: a.aps + a.fontes + (a.urgentes * 2) }))
         .sort((a, b) => b.score - a.score)
@@ -750,14 +951,12 @@ function renderRanking(ranking) {
     })
 }
 
-// Post automático no mural na virada do mês
-function verificarVirадаMes() {
+function verificarViradaMes() {
     const agora    = new Date()
     const chave    = `ranking_postado_${agora.getFullYear()}_${agora.getMonth()}`
     if (localStorage.getItem(chave)) return
-    if (agora.getDate() !== 1) return // só no dia 1
+    if (agora.getDate() !== 1) return
 
-    // Calcula ranking do mês anterior para postar
     const mesPrev  = agora.getMonth() === 0 ? 11 : agora.getMonth() - 1
     const anoPrev  = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear()
     const nomeMes  = new Date(anoPrev, mesPrev, 1).toLocaleDateString('pt-BR', { month: 'long' })
@@ -820,7 +1019,6 @@ function renderFeed() {
     if (!list) return
     list.innerHTML = ''
     feedItems.forEach(item => {
-        // Cor do dot baseada no tipo de ação
         let dotColor = 'var(--blue)'
         if (item.conteudo && item.conteudo.includes('Concluí')) dotColor = 'var(--green-dark)'
         else if (item.conteudo && item.conteudo.includes('fonte') || item.conteudo && item.conteudo.includes('contato')) dotColor = 'var(--amber-dark)'
@@ -846,7 +1044,6 @@ function renderFeed() {
 async function addToFeed(autor, conteudo, anexo = null) {
     const { data, error } = await db.from('feed_items').insert([{ autor, conteudo, anexo }]).select().single()
     if (error) { console.error(error); return }
-    // Atualiza localmente imediatamente sem esperar o realtime
     if (!feedItems.find(f => f.id === data.id)) {
         feedItems.unshift(data)
         renderFeed()
