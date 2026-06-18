@@ -123,7 +123,6 @@ body {
     margin-top: 2px;
 }
 
-/* Oculta o emoji do logo-icon original */
 .logo-icon { display: none; }
 
 .menu { flex: 1; padding: 12px 0; }
@@ -402,7 +401,6 @@ body {
 .col-dot-amber  { background: #BA7517; }
 .col-dot-green  { background: #3B6D11; }
 
-/* Remove border-bottom colorida legada */
 .column-header.em-andamento,
 .column-header.factual,
 .column-header.concluida { border-bottom: 1px solid var(--border); }
@@ -520,7 +518,6 @@ body {
 
 .btn-small:hover { background: var(--bg); color: var(--text-1); border-color: var(--border-md); }
 
-/* Ação primária — azul */
 .btn-action-primary {
     height: 26px;
     padding: 0 10px;
@@ -537,7 +534,6 @@ body {
 .btn-action-primary-amber { background: var(--amber-dark); }
 .btn-action-primary-green { background: var(--green-dark); }
 
-/* Ação secundária — neutro */
 .btn-action-secondary {
     height: 26px;
     padding: 0 10px;
@@ -553,7 +549,6 @@ body {
 
 .btn-action-secondary:hover { background: var(--bg); }
 
-/* Menu 3 pontos */
 .btn-more {
     height: 26px;
     width: 26px;
@@ -572,7 +567,6 @@ body {
 
 .btn-more:hover { background: var(--bg); }
 
-/* Dropdown do menu 3 pontos */
 .card-more-menu {
     display: none;
     position: absolute;
@@ -667,7 +661,6 @@ body {
     color: var(--text-2);
 }
 
-/* Mural legado — mantém compatibilidade */
 .feed-sidebar h2 {
     font-size: 10px;
     font-weight: 600;
@@ -734,7 +727,6 @@ body {
     border-radius: 99px;
 }
 
-/* Input do mural */
 .mural-form {
     display: flex;
     gap: 6px;
@@ -756,7 +748,7 @@ body {
     font-size: 11px;
 }
 
-/* ===== CAIXAS DE CONTEÚDO (rondas, fontes, registros) ===== */
+/* ===== CAIXAS DE CONTEÚDO ===== */
 .content-box {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -988,21 +980,17 @@ body {
 
 /* ===== RESPONSIVE ===== */
 
-/* Tablet largo — mural some */
 @media (max-width: 1200px) {
     .dashboard-body { grid-template-columns: 1fr; }
     .feed-sidebar { display: none; }
 }
 
-/* Tablet — kanban 2 colunas */
 @media (max-width: 1024px) {
     .kanban-board { grid-template-columns: 1fr 1fr; }
 }
 
-/* Mobile — layout completo */
 @media (max-width: 768px) {
 
-    /* Sidebar vira drawer oculto */
     .sidebar {
         transform: translateX(-100%);
         transition: transform 0.25s ease;
@@ -1012,7 +1000,6 @@ body {
 
     .sidebar.open { transform: translateX(0); }
 
-    /* Overlay escuro atrás do drawer */
     .sidebar-overlay {
         display: none;
         position: fixed;
@@ -1025,58 +1012,33 @@ body {
 
     .main-content { margin-left: 0; }
 
-    /* Topbar mobile: hambúrguer + título + botão novo */
     .page-topbar {
         padding: 0 14px;
         gap: 8px;
     }
 
-    .page-topbar-actions {
-        gap: 6px;
-    }
+    .page-topbar-actions { gap: 6px; }
 
-    /* Esconde busca e filtro de autor no mobile — espaço demais */
-    #search-kanban,
-    #filter-autor { display: none; }
+    #search-kanban, #filter-autor { display: none; }
 
-    /* Stats strip mais compacto */
-    .stat-item { padding: 10px 12px; }
-    .stat-n    { font-size: 18px; }
-    .stat-l    { font-size: 9px; }
-
-    /* Kanban coluna única */
     .kanban-board { grid-template-columns: 1fr; }
     .kanban-wrap  { padding: 12px; }
 
-    /* Colunas sem min-height vazia */
     .column-content { min-height: 0; }
-
-    /* Colunas com cards vazios ficam menores */
     .kanban-column:not(:has(.card)) .column-content { min-height: 40px; }
 
-    /* Cards mais compactos */
     .card { padding: 10px 12px; }
     .card-title { font-size: 13px; }
     .card-description { font-size: 12px; }
-
-    /* Botões de ação menores */
     .btn-small { padding: 4px 8px; font-size: 10px; }
 
-    /* Conteúdo de páginas internas */
     .content-box { margin: 12px; padding: 16px; }
     .header { padding: 16px 16px 0; margin-bottom: 12px; }
     .header h1 { font-size: 17px; }
 
-    /* Fontes em coluna única */
     .fontes-grid { grid-template-columns: 1fr; }
-
-    /* Form rows em coluna */
     .form-row { grid-template-columns: 1fr; }
-
-    /* Modal full-width */
     .modal-content { padding: 20px; width: 95%; }
-
-    /* Botão novo no topbar menor */
     .btn-primary { font-size: 11px; padding: 0 12px; }
 }
 
@@ -1105,7 +1067,6 @@ body {
     font-style: italic;
 }
 
-/* Remove filtro de tipo que não existe mais */
 #filter-tipo { display: none; }
 
 /* ===== HAMBÚRGUER (mobile only) ===== */
@@ -1401,9 +1362,21 @@ body {
 .demanda-sep { font-size: 10px; color: var(--text-3); text-align: center; padding: 4px 0; letter-spacing: 0.5px; text-transform: uppercase; }
 .demanda-empty { font-size: 11px; color: var(--text-3); text-align: center; padding: 8px; }
 
-/* ===== CALENDÁRIO ===== */
-#page-calendario { flex: 1; display: flex; flex-direction: column; }
-#page-calendario > div[style] { flex: 1; display: flex; flex-direction: column; }
+/* ===== CALENDÁRIO — LAYOUT FULLSCREEN ===== */
+#page-calendario {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cal-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    overflow: hidden;
+}
 
 .cal-toolbar {
     display: flex;
@@ -1414,6 +1387,7 @@ body {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+    flex-shrink: 0;
 }
 
 .cal-nav { display: flex; align-items: center; gap: 12px; }
@@ -1434,17 +1408,18 @@ body {
 .cal-btn-vista.active { background: var(--blue); color: #fff; border-color: var(--blue); }
 
 .cal-body {
+    flex: 1;
+    overflow-y: auto;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    overflow: hidden;
-    flex: 1;
 }
 
-/* Grade mensal */
 .cal-grid-mes {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(120px, 1fr);
+    height: 100%;
 }
 
 .cal-header-dia {
@@ -1508,155 +1483,13 @@ body {
 
 .cal-mais { font-size: 10px; color: var(--text-3); padding: 0 2px; }
 
-/* Tipos */
 .cal-tipo-pauta    { background: var(--blue-bg);  color: var(--blue-dark); }
 .cal-tipo-gravacao { background: var(--red-bg);   color: var(--red); }
 .cal-tipo-reuniao  { background: var(--amber-bg); color: var(--amber); }
 .cal-tipo-outro    { background: var(--bg);        color: var(--text-2); border: 1px solid var(--border); }
 
-/* Grade semanal */
-.cal-grid-semana {
-    display: grid;
-    grid-template-columns: 50px repeat(7, 1fr);
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-.cal-sem-header {
-    padding: 8px 4px;
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-    border-left: 1px solid var(--border);
-    background: var(--bg);
-    position: sticky;
-    top: 0;
-    z-index: 2;
-}
-
-.cal-sem-header.cal-dia-hoje { background: var(--blue-bg); color: var(--blue); }
-.cal-sem-num { font-size: 16px; font-weight: 500; color: var(--text-1); }
-
-.cal-hora {
-    padding: 4px 6px;
-    font-size: 10px;
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
-    text-align: right;
-    white-space: nowrap;
-}
-
-.cal-slot {
-    min-height: 40px;
-    border-bottom: 1px solid var(--border);
-    border-left: 1px solid var(--border);
-    padding: 2px;
-    cursor: pointer;
-}
-
-.cal-slot:hover { background: var(--blue-bg); }
-
-.cal-evento {
-    font-size: 11px;
-    font-weight: 500;
-    padding: 3px 6px;
-    border-radius: 3px;
-    margin-bottom: 2px;
-    cursor: pointer;
-    line-height: 1.3;
-}
-
-/* Grade diária */
-.cal-grid-dia { max-height: 70vh; overflow-y: auto; }
-
-.cal-dia-linha {
-    display: grid;
-    grid-template-columns: 50px 1fr;
-    border-bottom: 1px solid var(--border);
-}
-
-.cal-slot-dia { min-height: 50px; padding: 4px 8px; cursor: pointer; }
-.cal-slot-dia:hover { background: var(--blue-bg); }
-
-.cal-evento strong { display: block; font-size: 12px; }
-.cal-evento span   { font-size: 10px; opacity: 0.75; }
-.cal-evento div    { font-size: 11px; opacity: 0.8; margin-top: 2px; }
-
-/* Responsivo calendário */
 @media (max-width: 768px) {
     .cal-toolbar { flex-direction: column; gap: 10px; align-items: flex-start; }
     .cal-dia { min-height: 60px; }
     .cal-dia-num { font-size: 11px; }
-}
-
-/* ===== CALENDÁRIO — correção altura total ===== */
-#page-calendario {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 52px);
-}
-
-#page-calendario .header {
-    flex-shrink: 0;
-}
-
-#page-calendario > div {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.cal-toolbar { flex-shrink: 0; }
-
-.cal-body {
-    flex: 1;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.cal-grid-mes {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    flex: 1;
-    grid-template-rows: auto repeat(6, 1fr);
-}
-
-.cal-dia {
-    min-height: 0;
-}
-
-/* ===== CALENDÁRIO — altura forçada ===== */
-#page-calendario {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    min-height: calc(100vh - 52px) !important;
-}
-
-#page-calendario > * { flex-shrink: 0; }
-
-#page-calendario > div[style*="padding"] {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-}
-
-#page-calendario .cal-body {
-    flex: 1 !important;
-    overflow: auto !important;
-    min-height: 500px;
-}
-
-#page-calendario .cal-grid-mes {
-    display: grid !important;
-    grid-template-columns: repeat(7, 1fr) !important;
-    grid-auto-rows: minmax(120px, 1fr) !important;
-    height: 100% !important;
-    min-height: 500px;
 }
